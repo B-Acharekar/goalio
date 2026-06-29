@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Goalio</string>
+    <!-- Add the UUID from OneSignal Dashboard > Settings > Keys &amp; IDs. -->
+    <string name="onesignal_app_id" translatable="false">YOUR_ONESIGNAL_APP_ID</string>
+</resources>

@@ -1,0 +1,488 @@
+package com.goalio.scores
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import coil3.compose.AsyncImage
+
+data class FavoriteTeam(
+    val id: String,
+    val name: String,
+    val shortName: String,
+    val primaryColor: Color,
+    val imageUrl: String? = null
+)
+
+data class FavoritePlayer(
+    val id: String,
+    val name: String,
+    val team: String,
+    val initials: String,
+    val accent: Color,
+    val imageUrl: String? = null
+)
+
+data class ProfileDraft(
+    val fullName: String,
+    val username: String,
+    val teamIds: Set<String>,
+    val playerIds: Set<String>,
+    val favoriteTeamNames: List<String>,
+    val favoritePlayerNames: List<String>
+)
+
+/** Replace this demo source with the backend implementation without changing the screen. */
+object DemoFavoritesRepository {
+    val teams = listOf(
+        FavoriteTeam("arg", "Argentina", "ARG", Color(0xFF75B9E7)),
+        FavoriteTeam("bra", "Brazil", "BRA", Color(0xFFF7D34A)),
+        FavoriteTeam("fra", "France", "FRA", Color(0xFF3159A7)),
+        FavoriteTeam("eng", "England", "ENG", Color(0xFFF4F4F4)),
+        FavoriteTeam("esp", "Spain", "ESP", Color(0xFFD94848)),
+        FavoriteTeam("por", "Portugal", "POR", Color(0xFF2B9A62))
+    )
+
+    val players = listOf(
+        FavoritePlayer("messi", "Lionel Messi", "Argentina", "LM", Color(0xFF77BDEB)),
+        FavoritePlayer("mbappe", "Kylian Mbappe", "France", "KM", Color(0xFF344E9B)),
+        FavoritePlayer("ronaldo", "Cristiano Ronaldo", "Portugal", "CR", Color(0xFF268D59)),
+        FavoritePlayer("bellingham", "Jude Bellingham", "England", "JB", Color(0xFFECECEC))
+    )
+}
+
+private val Gold = Color(0xFF897846)
+private val Panel = Color(0xF2131514)
+private val Field = Color(0xFF202322)
+private val Muted = Color(0xFFAAA9AA)
+
+@Composable
+fun ProfileSetupScreen(
+    onBack: () -> Unit,
+    onSkip: () -> Unit,
+    onComplete: suspend (ProfileDraft) -> String?
+) {
+    var fullName by rememberSaveable { mutableStateOf("") }
+    var username by rememberSaveable { mutableStateOf("") }
+    var teamQuery by rememberSaveable { mutableStateOf("") }
+    var playerQuery by rememberSaveable { mutableStateOf("") }
+    var selectedTeams by rememberSaveable { mutableStateOf(setOf<String>()) }
+    var selectedPlayers by rememberSaveable { mutableStateOf(setOf<String>()) }
+    var teamCatalog by remember { mutableStateOf(DemoFavoritesRepository.teams) }
+    var playerCatalog by remember { mutableStateOf(DemoFavoritesRepository.players) }
+    var submitting by remember { mutableStateOf(false) }
+    var submitError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val valid = fullName.trim().length >= 2 && username.length >= 3
+    val teams = remember(teamQuery, teamCatalog) {
+        teamCatalog.filter { it.name.contains(teamQuery, true) }
+    }
+    val players = remember(playerQuery, playerCatalog) {
+        playerCatalog.filter {
+            it.name.contains(playerQuery, true) || it.team.contains(playerQuery, true)
+        }
+    }
+
+    LaunchedEffect(teamQuery) {
+        delay(250)
+        runCatching { GoalioBackendApi.searchTeams(teamQuery) }.onSuccess { results ->
+            teamCatalog = (teamCatalog + results).distinctBy { it.id }
+        }
+    }
+    LaunchedEffect(playerQuery) {
+        delay(250)
+        runCatching { GoalioBackendApi.searchPlayers(playerQuery) }.onSuccess { results ->
+            playerCatalog = (playerCatalog + results).distinctBy { it.id }
+        }
+    }
+
+    BackHandler(onBack = onBack)
+    GoalioBackground(.18f) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
+            ProfileHeader(onBack, onSkip)
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                item {
+                    Surface(
+                        color = Panel,
+                        border = BorderStroke(1.dp, Color(0xFF303231)),
+                        shape = RoundedCornerShape(22.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(20.dp)) {
+                            Text("Set up your profile", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                            Text("Make Goalio yours. You can change these anytime.", color = Muted, fontSize = 14.sp, lineHeight = 20.sp)
+                            Spacer(Modifier.height(24.dp))
+                            LabeledInput("FULL NAME", "e.g., Alex Morgan", fullName, { fullName = it }, true)
+                            Spacer(Modifier.height(18.dp))
+                            LabeledInput(
+                                "PICK YOUR USERNAME",
+                                "e.g., GoalGetter99",
+                                username,
+                                { value -> username = value.filter { it.isLetterOrDigit() || it == '_' }.take(20) },
+                                false,
+                                showValid = username.length >= 3
+                            )
+                            Spacer(Modifier.height(30.dp))
+                            Text("Follow your favorites", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                            Text("Get live updates for the teams you love.", color = Color(0xFFD0CFD0), fontSize = 15.sp)
+                            Spacer(Modifier.height(17.dp))
+                            SearchInput("Search teams...", teamQuery) { teamQuery = it }
+                            AnimatedVisibility(selectedTeams.isNotEmpty()) {
+                                Row(
+                                    Modifier.padding(top = 13.dp).horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    teamCatalog.filter { it.id in selectedTeams }.forEach { team ->
+                                        SelectionChip(team.name) { selectedTeams = selectedTeams - team.id }
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(15.dp))
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                maxItemsInEachRow = 2
+                            ) {
+                                teams.forEach { team ->
+                                    TeamCard(
+                                        team,
+                                        selected = team.id in selectedTeams,
+                                        modifier = Modifier.weight(1f),
+                                        onClick = {
+                                            selectedTeams = if (team.id in selectedTeams) selectedTeams - team.id else selectedTeams + team.id
+                                        }
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(28.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Who's your hero?", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                SearchGlyph(Modifier.size(25.dp), Color.White)
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            SearchInput("Search players...", playerQuery) { playerQuery = it }
+                            Spacer(Modifier.height(15.dp))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                items(players, key = { it.id }) { player ->
+                                    PlayerCard(player, player.id in selectedPlayers) {
+                                        selectedPlayers = if (player.id in selectedPlayers) selectedPlayers - player.id else selectedPlayers + player.id
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Surface(color = Color(0xF2131413), border = BorderStroke(1.dp, Color(0xFF3A3529))) {
+                Column {
+                    if (submitError != null) {
+                        Text(
+                            submitError.orEmpty(),
+                            color = Color(0xFFFF8A80),
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(horizontal = 26.dp, vertical = 4.dp)
+                        )
+                    }
+                    Button(
+                        enabled = valid && !submitting,
+                        onClick = {
+                            val draft = ProfileDraft(
+                                fullName = fullName.trim(),
+                                username = username.trim().lowercase(),
+                                teamIds = selectedTeams,
+                                playerIds = selectedPlayers,
+                                favoriteTeamNames = teamCatalog.filter { it.id in selectedTeams }.map { it.name },
+                                favoritePlayerNames = playerCatalog.filter { it.id in selectedPlayers }.map { it.name }
+                            )
+                            scope.launch {
+                                submitting = true
+                                submitError = onComplete(draft)
+                                submitting = false
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 22.dp, vertical = 16.dp).height(58.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = Color.Black,
+                            disabledContainerColor = Color(0xFF454545),
+                            disabledContentColor = Color(0xFF999999)
+                        ),
+                        shape = RoundedCornerShape(50)
+                    ) {
+                        Text(if (submitting) "SAVING…" else "CONTINUE  →", fontSize = 15.sp, fontWeight = FontWeight.Black, letterSpacing = 1.4.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileHeader(onBack: () -> Unit, onSkip: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().height(70.dp).padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(38.dp).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
+            BackGlyph(Modifier.size(25.dp), Color.White)
+        }
+        Spacer(Modifier.weight(1f))
+        Text("⚽ Goalio", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
+        Spacer(Modifier.weight(1f))
+        Text("Skip", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.clickable(onClick = onSkip).padding(8.dp))
+    }
+}
+
+@Composable
+private fun LabeledInput(
+    label: String,
+    hint: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    capitalize: Boolean,
+    showValid: Boolean = false
+) {
+    Column {
+        Text(label, color = Color(0xFFDADADA), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
+        Spacer(Modifier.height(7.dp))
+        Row(
+            Modifier.fillMaxWidth().height(60.dp).background(Field, RoundedCornerShape(13.dp))
+                .border(1.dp, if (showValid) Gold else Color(0xFF565149), RoundedCornerShape(13.dp)).padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(Modifier.weight(1f)) {
+                if (value.isEmpty()) Text(hint, color = Color(0xFF77736B), fontSize = 16.sp)
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    singleLine = true,
+                    textStyle = TextStyle(Color.White, 16.sp),
+                    keyboardOptions = KeyboardOptions(capitalization = if (capitalize) KeyboardCapitalization.Words else KeyboardCapitalization.None),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (showValid) {
+                Box(Modifier.size(24.dp).background(Color(0xFF28C76F), CircleShape), contentAlignment = Alignment.Center) {
+                    CheckGlyph(Modifier.size(13.dp), Color(0xFF07180E))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchInput(hint: String, value: String, onValueChange: (String) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().height(54.dp).background(Color.Black, RoundedCornerShape(50))
+            .border(1.dp, Color(0xFF62583D), RoundedCornerShape(50)).padding(horizontal = 17.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        SearchGlyph(Modifier.size(21.dp), Color(0xFFE5E5E5))
+        Spacer(Modifier.width(13.dp))
+        Box(Modifier.weight(1f)) {
+            if (value.isEmpty()) Text(hint, color = Color(0xFF777A86), fontSize = 15.sp)
+            BasicTextField(value, onValueChange, singleLine = true, textStyle = TextStyle(Color.White, 15.sp), modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
+
+@Composable
+private fun SelectionChip(label: String, onRemove: () -> Unit) {
+    Surface(color = Color.White, shape = RoundedCornerShape(50), onClick = onRemove) {
+        Text("$label  ×", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 7.dp))
+    }
+}
+
+@Composable
+private fun TeamCard(team: FavoriteTeam, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        color = Color(0xFF292C2B),
+        shape = RoundedCornerShape(15.dp),
+        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) Color.White else Color(0xFF5D543A)),
+        modifier = modifier.height(112.dp)
+    ) {
+        Box(Modifier.padding(12.dp)) {
+            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    Modifier.size(width = 48.dp, height = 34.dp).clip(RoundedCornerShape(5.dp))
+                        .background(Brush.verticalGradient(listOf(team.primaryColor.copy(alpha = .75f), team.primaryColor))),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (team.imageUrl != null) {
+                        AsyncImage(
+                            model = team.imageUrl,
+                            contentDescription = "${team.name} badge",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Text(team.shortName.take(1), color = if (team.shortName == "ENG") Color.Black else Color.White, fontSize = 16.sp, fontWeight = FontWeight.Black)
+                    }
+                }
+                Spacer(Modifier.height(9.dp))
+                Text(team.name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            }
+            if (selected) {
+                Box(Modifier.align(Alignment.TopEnd).size(20.dp).background(Color.White, CircleShape), contentAlignment = Alignment.Center) {
+                    CheckGlyph(Modifier.size(11.dp), Color(0xFF6C5C2F))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlayerCard(player: FavoritePlayer, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        color = Color(0xFF292C2B),
+        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) Color.White else Color(0xFF62583D)),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.width(210.dp)
+    ) {
+        Column {
+            Box(
+                Modifier.fillMaxWidth().height(160.dp)
+                    .background(Brush.radialGradient(listOf(player.accent.copy(alpha = .56f), Color(0xFF090B0B))))
+            ) {
+                if (player.imageUrl != null) {
+                    AsyncImage(
+                        model = player.imageUrl,
+                        contentDescription = player.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    PlayerSilhouette(Modifier.align(Alignment.BottomCenter).size(132.dp), player.accent)
+                }
+                Surface(
+                    color = Color(0xD90D0F0F), shape = CircleShape,
+                    border = BorderStroke(1.dp, player.accent.copy(alpha = .8f)),
+                    modifier = Modifier.align(Alignment.BottomStart).padding(12.dp).size(38.dp)
+                ) { Box(contentAlignment = Alignment.Center) { Text(player.initials, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) } }
+            }
+            Column(Modifier.padding(13.dp)) {
+                Text(player.name, color = Color.White, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(player.team, color = Muted, fontSize = 12.sp)
+                Spacer(Modifier.height(10.dp))
+                Surface(
+                    onClick = onClick,
+                    color = if (selected) Color.White else Color.Transparent,
+                    contentColor = if (selected) Color.Black else Color.White,
+                    border = BorderStroke(1.dp, Color.White),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth().height(39.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(if (selected) "PINNED ✓" else "+ PIN TO DASHBOARD", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchGlyph(modifier: Modifier, color: Color) = Canvas(modifier) {
+    drawCircle(color, radius = size.minDimension * .3f, center = Offset(size.width * .42f, size.height * .42f), style = Stroke(size.minDimension * .12f))
+    drawLine(color, Offset(size.width * .64f, size.height * .64f), Offset(size.width * .91f, size.height * .91f), size.minDimension * .12f, StrokeCap.Round)
+}
+
+@Composable
+private fun BackGlyph(modifier: Modifier, color: Color) = Canvas(modifier) {
+    drawLine(color, Offset(size.width * .85f, size.height * .5f), Offset(size.width * .15f, size.height * .5f), size.minDimension * .1f, StrokeCap.Round)
+    drawLine(color, Offset(size.width * .15f, size.height * .5f), Offset(size.width * .43f, size.height * .2f), size.minDimension * .1f, StrokeCap.Round)
+    drawLine(color, Offset(size.width * .15f, size.height * .5f), Offset(size.width * .43f, size.height * .8f), size.minDimension * .1f, StrokeCap.Round)
+}
+
+@Composable
+private fun CheckGlyph(modifier: Modifier, color: Color) = Canvas(modifier) {
+    val path = Path().apply {
+        moveTo(size.width * .12f, size.height * .52f)
+        lineTo(size.width * .4f, size.height * .8f)
+        lineTo(size.width * .9f, size.height * .2f)
+    }
+    drawPath(path, color, style = Stroke(size.minDimension * .14f, cap = StrokeCap.Round))
+}
+
+@Composable
+private fun PlayerSilhouette(modifier: Modifier, accent: Color) = Canvas(modifier) {
+    drawCircle(Color(0xFFE8C7AF), size.minDimension * .13f, Offset(size.width * .5f, size.height * .25f))
+    drawCircle(Color(0xFF17130F), size.minDimension * .135f, Offset(size.width * .5f, size.height * .2f))
+    val body = Path().apply {
+        moveTo(size.width * .27f, size.height)
+        lineTo(size.width * .32f, size.height * .48f)
+        lineTo(size.width * .44f, size.height * .38f)
+        lineTo(size.width * .56f, size.height * .38f)
+        lineTo(size.width * .68f, size.height * .48f)
+        lineTo(size.width * .73f, size.height)
+        close()
+    }
+    drawPath(body, accent)
+    drawLine(Color.White.copy(alpha = .65f), Offset(size.width * .5f, size.height * .44f), Offset(size.width * .5f, size.height), size.width * .025f)
+}

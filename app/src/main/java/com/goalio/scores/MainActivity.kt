@@ -1,0 +1,327 @@
+package com.goalio.scores
+
+import android.Manifest
+import android.os.Bundle
+import android.os.Build
+import android.os.LocaleList
+import android.view.ViewGroup
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.material3.Text
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.unit.dp
+import com.goalio.scores.ui.theme.GoalioTheme
+import com.onesignal.OneSignal
+import kotlinx.coroutines.delay
+import java.util.Locale
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            splashScreen.setOnExitAnimationListener { splashScreenView ->
+                splashScreenView.animate()
+                    .alpha(0f)
+                    .setDuration(220L)
+                    .withEndAction {
+                        (splashScreenView.parent as? ViewGroup)?.removeView(splashScreenView)
+                    }
+                    .start()
+            }
+        }
+        setContent {
+            GoalioTheme(dynamicColor = false) {
+                val settings = remember { getSharedPreferences("goalio_settings", MODE_PRIVATE) }
+                var showSplash by remember { mutableStateOf(true) }
+                var languageSelected by remember { mutableStateOf(settings.contains("language")) }
+                var onboardingComplete by remember {
+                    mutableStateOf(settings.getBoolean("onboarding_complete", false))
+                }
+                var profileComplete by remember {
+                    mutableStateOf(settings.getBoolean("profile_complete", false))
+                }
+                val notificationLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission()
+                ) { }
+                LaunchedEffect(Unit) {
+                    delay(2800)
+                    showSplash = false
+                }
+                LaunchedEffect(showSplash) {
+                    if (!showSplash && !settings.getBoolean("notification_prompt_requested", false)) {
+                        // The language screen is composed first, so it remains behind the OS prompt.
+                        delay(300)
+                        settings.edit().putBoolean("notification_prompt_requested", true).apply()
+                        val appId = getString(R.string.onesignal_app_id)
+                        if (appId.matches(Regex("[0-9a-fA-F-]{36}"))) {
+                            OneSignal.Notifications.requestPermission(false)
+                        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
+                }
+                LaunchedEffect(showSplash) {
+                    if (!showSplash) {
+                        runCatching { GoalioBackendApi.getProfile() }.onSuccess { profile ->
+                            if (profile.onboardingCompleted) {
+                                settings.edit().putBoolean("onboarding_complete", true).apply()
+                                onboardingComplete = true
+                            }
+                            if (profile.profileCompleted) {
+                                settings.edit()
+                                    .putString("profile_full_name", profile.name)
+                                    .putString("profile_username", profile.username)
+                                    .putStringSet("profile_team_names", profile.favoriteTeams.toSet())
+                                    .putStringSet("profile_player_names", profile.favoritePlayers.toSet())
+                                    .putBoolean("profile_complete", true)
+                                    .apply()
+                                profileComplete = true
+                            }
+                        }
+                    }
+                }
+                when {
+                    showSplash -> SplashScreen()
+                    !languageSelected -> LanguageScreen(
+                        onBack = { showSplash = true },
+                        onDone = { languageTag ->
+                            settings.edit().putString("language", languageTag).apply()
+                            applyLanguage(languageTag)
+                            languageSelected = true
+                        }
+                    )
+                    !onboardingComplete -> OnboardingScreen(
+                        onComplete = {
+                            settings.edit().putBoolean("onboarding_complete", true).apply()
+                            onboardingComplete = true
+                        }
+                    )
+                    !profileComplete -> ProfileSetupScreen(
+                        onBack = {
+                            settings.edit().putBoolean("onboarding_complete", false).apply()
+                            onboardingComplete = false
+                        },
+                        onSkip = {
+                            settings.edit().putBoolean("profile_complete", true).apply()
+                            profileComplete = true
+                        },
+                        onComplete = { profile ->
+                            try {
+                                GoalioBackendApi.saveProfile(profile)
+                                settings.edit()
+                                    .putString("profile_full_name", profile.fullName)
+                                    .putString("profile_username", profile.username)
+                                    .putStringSet("profile_team_ids", profile.teamIds)
+                                    .putStringSet("profile_player_ids", profile.playerIds)
+                                    .putStringSet("profile_team_names", profile.favoriteTeamNames.toSet())
+                                    .putStringSet("profile_player_names", profile.favoritePlayerNames.toSet())
+                                    .putBoolean("profile_complete", true)
+                                    .apply()
+                                profileComplete = true
+                                null
+                            } catch (error: Exception) {
+                                error.message ?: "Could not save your profile. Check the connection and try again."
+                            }
+                        }
+                    )
+                    else -> PersonalizedHomeScreen(
+                        fallbackName = settings.getString("profile_full_name", null),
+                        fallbackTeams = settings.getStringSet("profile_team_names", emptySet()).orEmpty(),
+                        fallbackPlayers = settings.getStringSet("profile_player_names", emptySet()).orEmpty()
+                    )
+                }
+            }
+        }
+    }
+
+    private fun applyLanguage(languageTag: String) {
+        if (languageTag == "system") return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getSystemService(android.app.LocaleManager::class.java)
+                .applicationLocales = LocaleList.forLanguageTags(languageTag)
+        } else {
+            @Suppress("DEPRECATION")
+            resources.updateConfiguration(
+                resources.configuration.apply { setLocale(Locale.forLanguageTag(languageTag)) },
+                resources.displayMetrics
+            )
+        }
+    }
+}
+
+/** Use this as the root of every screen so the Goalio artwork remains consistent. */
+@Composable
+fun GoalioBackground(backgroundAlpha: Float = 1f, content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        Image(
+            painter = painterResource(R.drawable.goalio_background),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().alpha(backgroundAlpha)
+        )
+        content()
+    }
+}
+
+@Composable
+fun SplashScreen() {
+    val backgroundAlpha = androidx.compose.runtime.remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        backgroundAlpha.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 650, easing = LinearEasing)
+        )
+    }
+
+    GoalioBackground(backgroundAlpha = backgroundAlpha.value) {
+        Box(Modifier.fillMaxSize()) {
+            Image(
+                painter = painterResource(R.drawable.goalio_logo),
+                contentDescription = "Goalio",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.align(Alignment.Center).size(180.dp)
+            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .offset(y = 132.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "GOALIO",
+                    color = Color.White,
+                    fontSize = 27.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 7.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(5.dp))
+                Text(
+                    text = "LIVE FOOTBALL SCORES",
+                    color = Color(0xFFD5D5D5),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Normal,
+                    letterSpacing = 3.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+            LoadingGoal(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .offset(y = (-82).dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun GoalioHomeScreen() {
+    GoalioBackground(.4f) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("GOALIO", color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Bold,
+                letterSpacing = 7.sp)
+        }
+    }
+}
+
+@Composable
+private fun LoadingGoal(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "splash loading")
+    val progress = transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ball progress"
+    ).value
+    val trackWidth = 300.dp
+    val ballSize = 42.dp
+    val goalWidth = 64.dp
+    val travelPx = with(LocalDensity.current) { (trackWidth - ballSize).toPx() }
+    val density = LocalDensity.current
+    val ballVisible = progress < .86f
+
+    Box(modifier = modifier.width(trackWidth).size(width = trackWidth, height = 76.dp)) {
+        Box(
+            Modifier
+                .align(Alignment.CenterStart)
+                .width(trackWidth - 20.dp)
+                .size(height = 5.dp, width = trackWidth - 20.dp)
+                .clip(RoundedCornerShape(50))
+                .background(Color(0xFF656565))
+        )
+        Box(
+            Modifier
+                .align(Alignment.CenterStart)
+                .width((trackWidth - 20.dp) * progress)
+                .size(height = 5.dp, width = (trackWidth - 20.dp) * progress)
+                .clip(RoundedCornerShape(50))
+                .background(Color.White)
+        )
+        Image(
+            painter = painterResource(R.drawable.football_goal),
+            contentDescription = "Goal",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.align(Alignment.CenterEnd).size(goalWidth)
+        )
+        Image(
+            painter = painterResource(R.drawable.football_ball),
+            contentDescription = "Loading",
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .offset(x = with(density) { (travelPx * progress).toDp() })
+                .size(ballSize)
+                .graphicsLayer {
+                    alpha = if (ballVisible) 1f else 0f
+                    rotationZ = progress * 720f
+                }
+        )
+    }
+}
+
+@Preview(showBackground = true, widthDp = 390, heightDp = 844)
+@Composable
+private fun SplashPreview() = GoalioTheme(dynamicColor = false) { SplashScreen() }
