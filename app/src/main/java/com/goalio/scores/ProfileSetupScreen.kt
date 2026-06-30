@@ -62,6 +62,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import coil3.compose.AsyncImage
 
@@ -70,7 +73,8 @@ data class FavoriteTeam(
     val name: String,
     val shortName: String,
     val primaryColor: Color,
-    val imageUrl: String? = null
+    val imageUrl: String? = null,
+    val competitionIds: Set<Int> = emptySet()
 )
 
 data class FavoritePlayer(
@@ -79,7 +83,8 @@ data class FavoritePlayer(
     val team: String,
     val initials: String,
     val accent: Color,
-    val imageUrl: String? = null
+    val imageUrl: String? = null,
+    val competitionIds: Set<Int> = emptySet()
 )
 
 data class ProfileDraft(
@@ -93,6 +98,25 @@ private val Gold = Color(0xFF897846)
 private val Panel = Color(0xF2131514)
 private val Field = Color(0xFF202322)
 private val Muted = Color(0xFFAAA9AA)
+private data class CompetitionFilter(val label: String, val id: Int?)
+private val CompetitionFilters = listOf(
+    CompetitionFilter("All", null),
+    CompetitionFilter("World Cup", 1),
+    CompetitionFilter("EPL", 39),
+    CompetitionFilter("LaLiga", 140),
+    CompetitionFilter("Serie A", 135),
+    CompetitionFilter("Bundesliga", 78),
+    CompetitionFilter("Ligue 1", 61)
+)
+private val FeaturedPlayerQueries = listOf(
+    "Lionel Messi",
+    "Cristiano Ronaldo",
+    "Kylian Mbappe",
+    "Erling Haaland",
+    "Mohamed Salah",
+    "Neymar"
+)
+private val FeaturedPlayerKeys = listOf("messi", "ronaldo", "mbapp", "haaland", "salah", "neymar")
 
 @Composable
 fun ProfileSetupScreen(
@@ -103,6 +127,8 @@ fun ProfileSetupScreen(
     var username by rememberSaveable { mutableStateOf("") }
     var teamQuery by rememberSaveable { mutableStateOf("") }
     var playerQuery by rememberSaveable { mutableStateOf("") }
+    var teamCompetitionId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var playerCompetitionId by rememberSaveable { mutableStateOf<Int?>(null) }
     var selectedTeams by rememberSaveable { mutableStateOf(setOf<String>()) }
     var selectedPlayers by rememberSaveable { mutableStateOf(setOf<String>()) }
     var teamCatalog by remember { mutableStateOf(emptyList<FavoriteTeam>()) }
@@ -124,22 +150,47 @@ fun ProfileSetupScreen(
     val fullNameValid = isValidFullName(fullName)
     val usernameRuleValid = isValidUsername(username)
     val valid = fullNameValid && usernameAvailable == true
-    val teams = remember(teamQuery, teamCatalog) {
-        teamCatalog.filter { it.name.contains(teamQuery, true) }
+    val teams = remember(teamQuery, teamCatalog, teamCompetitionId) {
+        teamCatalog.asSequence()
+            .filter { teamCompetitionId == null || teamCompetitionId in it.competitionIds }
+            .filter { it.name.contains(teamQuery, true) }
+            .take(6)
+            .toList()
     }
-    val players = remember(playerQuery, playerCatalog) {
-        playerCatalog.filter {
-            it.name.contains(playerQuery, true) || it.team.contains(playerQuery, true)
-        }
+    val players = remember(playerQuery, playerCatalog, playerCompetitionId) {
+        playerCatalog.asSequence()
+            .filter { playerCompetitionId == null || playerCompetitionId in it.competitionIds }
+            .filter { it.name.contains(playerQuery, true) || it.team.contains(playerQuery, true) }
+            .sortedBy { player ->
+                FeaturedPlayerKeys.indexOfFirst { it in player.name.lowercase() }
+                    .takeIf { it >= 0 } ?: Int.MAX_VALUE
+            }
+            .take(6)
+            .toList()
     }
 
     LaunchedEffect(Unit) {
         catalogError = null
-        runCatching { GoalioBackendApi.getTeams(limit = 200).items }
-            .onSuccess { teamCatalog = it }
+        val loadedTeams = runCatching { GoalioBackendApi.getTeams(limit = 200).items }
             .onFailure { catalogError = "Could not load teams. Check the connection and try again." }
+            .getOrDefault(emptyList())
+        teamCatalog = loadedTeams
+        val featuredPlayers = coroutineScope {
+            FeaturedPlayerQueries.map { query ->
+                async {
+                    runCatching { GoalioBackendApi.searchPlayers(query) }
+                        .getOrDefault(emptyList())
+                        .firstOrNull()
+                }
+            }.awaitAll().filterNotNull()
+        }
+        playerCatalog = featuredPlayers.map { it.withCompetitionIds(loadedTeams) }
         runCatching { GoalioBackendApi.getPlayers(limit = 100).items }
-            .onSuccess { playerCatalog = it }
+            .onSuccess {
+                playerCatalog = (featuredPlayers + it)
+                    .distinctBy { player -> player.id }
+                    .map { player -> player.withCompetitionIds(loadedTeams) }
+            }
             .onFailure { catalogError = "Could not load players. Search will retry the connection." }
         catalogLoading = false
     }
@@ -155,7 +206,8 @@ fun ProfileSetupScreen(
         if (playerQuery.trim().length < 2) return@LaunchedEffect
         delay(250)
         runCatching { GoalioBackendApi.searchPlayers(playerQuery) }.onSuccess { results ->
-            playerCatalog = (playerCatalog + results).distinctBy { it.id }
+            playerCatalog = (playerCatalog + results.map { it.withCompetitionIds(teamCatalog) })
+                .distinctBy { it.id }
         }
     }
     LaunchedEffect(username) {
@@ -221,6 +273,8 @@ fun ProfileSetupScreen(
                                 FieldMessage(catalogError.orEmpty(), false)
                             }
                             Spacer(Modifier.height(17.dp))
+                            CompetitionFilterRow(teamCompetitionId) { teamCompetitionId = it }
+                            Spacer(Modifier.height(12.dp))
                             SearchInput("Search teams...", teamQuery) { teamQuery = it }
                             Text(
                                 "${selectedTeams.size}/$teamLimit teams selected",
@@ -279,6 +333,8 @@ fun ProfileSetupScreen(
                                 Text("Who's your hero?", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                                 SearchGlyph(Modifier.size(25.dp), Color.White)
                             }
+                            Spacer(Modifier.height(12.dp))
+                            CompetitionFilterRow(playerCompetitionId) { playerCompetitionId = it }
                             Spacer(Modifier.height(12.dp))
                             SearchInput("Search players...", playerQuery) { playerQuery = it }
                             Text(
@@ -433,6 +489,15 @@ private fun isValidUsername(value: String): Boolean {
     return value !in setOf("admin", "administrator", "goalio", "support", "moderator", "root", "system")
 }
 
+private fun FavoritePlayer.withCompetitionIds(teams: List<FavoriteTeam>): FavoritePlayer {
+    if (competitionIds.isNotEmpty()) return this
+    val inferred = teams.asSequence()
+        .filter { team -> this.team.contains(team.name, ignoreCase = true) }
+        .flatMap { it.competitionIds.asSequence() }
+        .toSet()
+    return copy(competitionIds = inferred)
+}
+
 @Composable
 private fun SearchInput(hint: String, value: String, onValueChange: (String) -> Unit) {
     Row(
@@ -445,6 +510,29 @@ private fun SearchInput(hint: String, value: String, onValueChange: (String) -> 
         Box(Modifier.weight(1f)) {
             if (value.isEmpty()) Text(hint, color = Color(0xFF777A86), fontSize = 15.sp)
             BasicTextField(value, onValueChange, singleLine = true, textStyle = TextStyle(Color.White, 15.sp), modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
+
+@Composable
+private fun CompetitionFilterRow(selectedId: Int?, onSelected: (Int?) -> Unit) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(CompetitionFilters, key = { it.label }) { competition ->
+            val selected = competition.id == selectedId
+            Surface(
+                onClick = { onSelected(competition.id) },
+                color = if (selected) Color.White else Color(0xFF242625),
+                contentColor = if (selected) Color.Black else Color.White,
+                border = BorderStroke(1.dp, if (selected) Color.White else Color(0xFF62583D)),
+                shape = RoundedCornerShape(50)
+            ) {
+                Text(
+                    competition.label,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                )
+            }
         }
     }
 }

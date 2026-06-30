@@ -143,7 +143,15 @@ object GoalioBackendApi {
     private fun JSONArray.toTeamList() = buildList {
         for (index in 0 until length()) getJSONObject(index).run {
             val id = getString("id")
-            add(FavoriteTeam(id, getString("name"), getString("shortName"), resultColor(id), optString("imageUrl").ifBlank { null }))
+            add(FavoriteTeam(
+                id = id,
+                name = getString("name"),
+                shortName = getString("shortName"),
+                primaryColor = resultColor(id),
+                imageUrl = optString("imageUrl").ifBlank { null },
+                competitionIds = optJSONArray("competitionIds").toInts()
+                    .ifEmpty { setOfNotNull(competitionIdFromTeamId(id)) }
+            ))
         }
     }
 
@@ -152,8 +160,30 @@ object GoalioBackendApi {
             val name = getString("name")
             val id = getString("id")
             val initials = name.split(' ').mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("")
-            add(FavoritePlayer(id, name, getString("team"), initials, resultColor(id), optString("imageUrl").ifBlank { null }))
+            add(FavoritePlayer(
+                id = id,
+                name = name,
+                team = getString("team"),
+                initials = initials,
+                accent = resultColor(id),
+                imageUrl = optString("imageUrl").ifBlank { null },
+                competitionIds = optJSONArray("competitionIds").toInts()
+            ))
         }
+    }
+
+    private fun JSONArray?.toInts(): Set<Int> = buildSet {
+        if (this@toInts != null) for (index in 0 until length()) add(getInt(index))
+    }
+
+    private fun competitionIdFromTeamId(id: String): Int? = when {
+        "fifa.world" in id -> 1
+        "eng.1" in id -> 39
+        "esp.1" in id -> 140
+        "ita.1" in id -> 135
+        "ger.1" in id -> 78
+        "fra.1" in id -> 61
+        else -> null
     }
 
     private fun resultColor(id: String) = when (id) {
