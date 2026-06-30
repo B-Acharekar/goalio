@@ -27,6 +27,34 @@ data class BackendHome(val greeting: String, val profile: BackendProfile)
 
 data class BackendPage<T>(val items: List<T>, val nextCursor: String?)
 
+data class MatchTeamInfo(
+    val id: String,
+    val name: String,
+    val shortName: String?,
+    val abbreviation: String?,
+    val logo: String?,
+    val score: Int?
+)
+
+data class MatchVenueInfo(val name: String?, val city: String?)
+
+data class ScheduleMatch(
+    val matchId: String,
+    val league: String,
+    val name: String?,
+    val shortName: String?,
+    val status: String?,
+    val statusDescription: String?,
+    val state: String?,
+    val kickoff: String?,
+    val homeTeam: MatchTeamInfo?,
+    val awayTeam: MatchTeamInfo?,
+    val venue: MatchVenueInfo?,
+    val detailApi: String
+)
+
+data class MatchSchedule(val league: String, val date: String?, val matches: List<ScheduleMatch>)
+
 object GoalioBackendApi {
     private val baseUrl: String
         get() = FirebaseRemoteConfig.getInstance().getString("backend_base_url")
@@ -91,6 +119,10 @@ object GoalioBackendApi {
             nextCursor = json.nullableString("nextCursor")
         )
     }
+
+    suspend fun getSchedule(league: String, date: String): MatchSchedule = request(
+        "GET", "/api/v1/matches/${encodePath(league)}/schedule?date=${encode(date)}"
+    ) { json -> json.toMatchSchedule() }
 
     private suspend fun <T> request(
         method: String,
@@ -186,6 +218,45 @@ object GoalioBackendApi {
         if (this@toInts != null) for (index in 0 until length()) add(getInt(index))
     }
 
+    private fun JSONObject.toMatchSchedule() = MatchSchedule(
+        league = getString("league"),
+        date = nullableString("date"),
+        matches = getJSONArray("matches").toScheduleMatches()
+    )
+
+    private fun JSONArray.toScheduleMatches() = buildList {
+        for (index in 0 until length()) getJSONObject(index).run {
+            add(ScheduleMatch(
+                matchId = getString("matchId"),
+                league = getString("league"),
+                name = nullableString("name"),
+                shortName = nullableString("shortName"),
+                status = nullableString("status"),
+                statusDescription = nullableString("statusDescription"),
+                state = nullableString("state"),
+                kickoff = nullableString("kickoff"),
+                homeTeam = optJSONObject("homeTeam")?.toMatchTeamInfo(),
+                awayTeam = optJSONObject("awayTeam")?.toMatchTeamInfo(),
+                venue = optJSONObject("venue")?.toMatchVenueInfo(),
+                detailApi = getString("detailApi")
+            ))
+        }
+    }
+
+    private fun JSONObject.toMatchTeamInfo() = MatchTeamInfo(
+        id = getString("id"),
+        name = getString("name"),
+        shortName = nullableString("shortName"),
+        abbreviation = nullableString("abbreviation"),
+        logo = nullableString("logo"),
+        score = if (isNull("score")) null else optInt("score")
+    )
+
+    private fun JSONObject.toMatchVenueInfo() = MatchVenueInfo(
+        name = nullableString("name"),
+        city = nullableString("city")
+    )
+
     private fun competitionIdFromTeamId(id: String): Int? = when {
         "fifa.world" in id -> 1
         "eng.1" in id -> 39
@@ -227,6 +298,8 @@ object GoalioBackendApi {
     }
 
     private fun encode(value: String) = URLEncoder.encode(value, Charsets.UTF_8.name())
+
+    private fun encodePath(value: String) = value.split('.').joinToString(".") { encode(it) }
 }
 
 class BackendException(val statusCode: Int, message: String) : Exception(message)

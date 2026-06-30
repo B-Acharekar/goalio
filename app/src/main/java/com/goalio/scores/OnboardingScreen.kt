@@ -99,24 +99,6 @@ fun OnboardingScreen(onComplete: () -> Unit) {
     }
 
     Box(Modifier.fillMaxSize().background(Ink)) {
-        Image(
-            painter = painterResource(R.drawable.goalio_background),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize().alpha(.18f)
-        )
-        Canvas(Modifier.fillMaxSize()) {
-            drawCircle(
-                brush = Brush.radialGradient(
-                    listOf(Gold.copy(alpha = .11f), Color.Transparent),
-                    center = Offset(size.width / 2, size.height * .35f),
-                    radius = size.width * .75f
-                ),
-                radius = size.width * .75f,
-                center = Offset(size.width / 2, size.height * .35f)
-            )
-        }
-
         Column(
             Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
         ) {

@@ -111,6 +111,7 @@ private val FeaturedPlayerKeys = listOf("messi", "ronaldo", "mbapp", "haaland", 
 @Composable
 fun ProfileSetupScreen(
     onBack: () -> Unit,
+    onSkip: () -> Unit,
     onComplete: suspend (ProfileDraft) -> String?
 ) {
     var fullName by rememberSaveable { mutableStateOf("") }
@@ -436,6 +437,16 @@ fun ProfileSetupScreen(
                             modifier = Modifier.padding(horizontal = 26.dp, vertical = 4.dp)
                         )
                     }
+                    Text(
+                        "Skip for now",
+                        color = Muted,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .clickable(onClick = onSkip)
+                            .padding(top = 4.dp, bottom = 14.dp)
+                    )
                     Button(
                         enabled = valid && !submitting,
                         onClick = {

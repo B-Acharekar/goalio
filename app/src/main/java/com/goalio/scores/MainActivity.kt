@@ -18,9 +18,11 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
@@ -36,8 +38,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -144,6 +150,10 @@ class MainActivity : ComponentActivity() {
                             settings.edit().putBoolean("onboarding_complete", false).apply()
                             onboardingComplete = false
                         },
+                        onSkip = {
+                            settings.edit().putBoolean("profile_complete", true).apply()
+                            profileComplete = true
+                        },
                         onComplete = { profile ->
                             try {
                                 val saved = GoalioBackendApi.saveProfile(profile)
@@ -188,42 +198,84 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Use this as the root of every screen so the Goalio artwork remains consistent. */
 @Composable
-fun GoalioBackground(backgroundAlpha: Float = 1f, content: @Composable () -> Unit) {
+fun GoalioBackground(backgroundAlpha: Float = 1f, content: @Composable BoxScope.() -> Unit) {
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        Image(
-            painter = painterResource(R.drawable.goalio_background),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize().alpha(backgroundAlpha)
-        )
         content()
     }
 }
 
 @Composable
 fun SplashScreen() {
-    val backgroundAlpha = androidx.compose.runtime.remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        backgroundAlpha.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 650, easing = LinearEasing)
-        )
-    }
+    val transition = rememberInfiniteTransition(label = "splash geometry")
+    val sweep = transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(3600, easing = LinearEasing)),
+        label = "sweep"
+    ).value
+    val pulse = transition.animateFloat(
+        initialValue = .65f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "pulse"
+    ).value
 
-    GoalioBackground(backgroundAlpha = backgroundAlpha.value) {
+    GoalioBackground {
         Box(Modifier.fillMaxSize()) {
-            Image(
-                painter = painterResource(R.drawable.goalio_logo),
-                contentDescription = "Goalio",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.align(Alignment.Center).size(180.dp)
-            )
+            Canvas(Modifier.fillMaxSize()) {
+                val center = Offset(size.width / 2f, size.height * .42f)
+                val radius = size.minDimension * .28f
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(Color(0xFFBFA25C).copy(alpha = .32f * pulse), Color.Transparent),
+                        center = center,
+                        radius = radius * 1.85f
+                    ),
+                    radius = radius * 1.85f,
+                    center = center
+                )
+                repeat(3) { ring ->
+                    drawCircle(
+                        color = Color.White.copy(alpha = .10f + ring * .04f),
+                        radius = radius * (.52f + ring * .28f) * pulse,
+                        center = center,
+                        style = Stroke(width = 2.2f)
+                    )
+                }
+                repeat(6) { index ->
+                    val angle = Math.toRadians((sweep + index * 60).toDouble())
+                    val start = Offset(
+                        center.x + kotlin.math.cos(angle).toFloat() * radius * .45f,
+                        center.y + kotlin.math.sin(angle).toFloat() * radius * .45f
+                    )
+                    val end = Offset(
+                        center.x + kotlin.math.cos(angle).toFloat() * radius * 1.1f,
+                        center.y + kotlin.math.sin(angle).toFloat() * radius * 1.1f
+                    )
+                    drawLine(
+                        color = if (index % 2 == 0) Color(0xFFFF3D1F) else Color(0xFFD8C58B),
+                        start = start,
+                        end = end,
+                        strokeWidth = 3f,
+                        alpha = .55f
+                    )
+                }
+                drawArc(
+                    color = Color.White.copy(alpha = .65f),
+                    startAngle = sweep,
+                    sweepAngle = 80f,
+                    useCenter = false,
+                    topLeft = Offset(center.x - radius, center.y - radius),
+                    size = Size(radius * 2, radius * 2),
+                    style = Stroke(width = 5f)
+                )
+                drawCircle(Color.White, radius = 8f * pulse, center = center)
+            }
             Column(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .offset(y = 132.dp),
+                    .offset(y = 124.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
@@ -244,11 +296,6 @@ fun SplashScreen() {
                     textAlign = TextAlign.Center
                 )
             }
-            LoadingGoal(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .offset(y = (-82).dp)
-            )
         }
     }
 }
