@@ -125,6 +125,10 @@ object GoalioBackendApi {
         "GET", "/api/v1/matches/${encodePath(league)}/schedule?date=${encode(date)}"
     ) { json -> json.toMatchSchedule() }
 
+    suspend fun getScheduleRange(league: String, from: String, to: String): MatchSchedule = request(
+        "GET", "/api/v1/matches/${encodePath(league)}/schedule?from=${encode(from)}&to=${encode(to)}"
+    ) { json -> json.toMatchSchedule() }
+
     private suspend fun <T> request(
         method: String,
         path: String,
@@ -270,7 +274,7 @@ object GoalioBackendApi {
 
     private fun resultColor(id: String) = when {
         id.contains("live", ignoreCase = true) -> GoalioColors.Live
-        id.contains("win", ignoreCase = true) -> GoalioColors.Positive
+        id.contains("win", ignoreCase = true) -> GoalioColors.Accent
         else -> GoalioColors.Accent
     }
 

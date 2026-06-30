@@ -46,7 +46,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -269,12 +268,12 @@ private fun LiveMatchIllustration(modifier: Modifier = Modifier) {
             }
             Spacer(Modifier.height(15.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceAround, modifier = Modifier.fillMaxWidth()) {
-                TeamBadge("ARG", Color(0xFF73BCE8))
+                TeamBadge("ARG", GoalioColors.Black400)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(if (score > .72f) "2  –  1" else "1  –  1", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
                     Text("Second half", color = Muted, fontSize = 8.sp)
                 }
-                TeamBadge("FRA", Color(0xFF284C9B))
+                TeamBadge("FRA", GoalioColors.Black600)
             }
             Spacer(Modifier.height(15.dp))
             Box(Modifier.fillMaxWidth().height(30.dp).background(Color(0xFF0D0F0E), RoundedCornerShape(8.dp))) {
@@ -309,10 +308,10 @@ private fun WorldCupIllustration(modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "world cup")
     val glow by transition.animateFloat(.25f, .75f, infiniteRepeatable(tween(1300), RepeatMode.Reverse), label = "glow")
     Canvas(modifier) {
-        drawCircle(Gold.copy(alpha = .08f + glow * .08f), size.minDimension * .4f, center)
+        drawCircle(Color.White.copy(alpha = .03f + glow * .03f), size.minDimension * .4f, center)
         drawGlobe(center, size.minDimension * .24f)
         val cardW = size.width * .3f
-        drawGroupCard(Offset(size.width * .05f, size.height * .22f), cardW, "GROUP A", listOf(Color(0xFF74B9E6), Color(0xFFFFD247), Color(0xFFE74B45)))
+        drawGroupCard(Offset(size.width * .05f, size.height * .22f), cardW, "GROUP A", listOf(GoalioColors.TextPrimary, GoalioColors.TextSecondary, GoalioColors.TextTertiary))
         drawBracket(Offset(size.width * .68f, size.height * .22f), size.width * .27f, size.height * .52f)
         drawTrophy(Offset(size.width * .5f, size.height * .56f), size.minDimension * .19f, Gold.copy(alpha = .76f + glow * .2f))
     }
@@ -324,7 +323,7 @@ private fun PlayIllustration(modifier: Modifier = Modifier) {
     val tilt by transition.animateFloat(-5f, 5f, infiniteRepeatable(tween(1200, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "tilt")
     Box(modifier, contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
-            drawCircle(Gold.copy(alpha = .09f), size.minDimension * .43f, center)
+            drawCircle(Color.White.copy(alpha = .04f), size.minDimension * .43f, center)
             drawPredictionGraph()
             drawLeaderboard(Offset(size.width * .65f, size.height * .18f), size.width * .28f, size.height * .48f)
         }
@@ -351,7 +350,7 @@ private fun DrawScope.drawStadiumLights() {
 }
 
 private fun DrawScope.drawGlobe(c: Offset, radius: Float) {
-    drawCircle(Color(0xFF17201D), radius, c)
+    drawCircle(GoalioColors.Black700, radius, c)
     drawCircle(Gold.copy(alpha = .68f), radius, c, style = Stroke(3f))
     drawOval(
         Gold.copy(alpha = .4f),
@@ -371,7 +370,7 @@ private fun DrawScope.drawGlobe(c: Offset, radius: Float) {
 private fun DrawScope.drawGroupCard(origin: Offset, width: Float, title: String, flags: List<Color>) {
     val height = size.height * .55f
     drawRoundRect(Card, origin, Size(width, height), androidx.compose.ui.geometry.CornerRadius(20f))
-    drawRoundRect(Color(0xFF3A3E3D), origin, Size(width, height), androidx.compose.ui.geometry.CornerRadius(20f), style = Stroke(2f))
+    drawRoundRect(GoalioColors.Black400, origin, Size(width, height), androidx.compose.ui.geometry.CornerRadius(20f), style = Stroke(2f))
     flags.forEachIndexed { index, color ->
         val y = origin.y + height * (.36f + index * .2f)
         drawCircle(color, 8f, Offset(origin.x + width * .2f, y))
@@ -430,7 +429,7 @@ private fun DrawScope.drawLeaderboard(origin: Offset, width: Float, height: Floa
     drawRoundRect(Card.copy(alpha = .92f), origin, Size(width, height), androidx.compose.ui.geometry.CornerRadius(20f))
     repeat(3) { i ->
         val y = origin.y + height * (.27f + i * .24f)
-        drawCircle(listOf(Gold, Color(0xFFC8C8C8), Color(0xFFA86C3D))[i], 8f, Offset(origin.x + width * .2f, y))
+        drawCircle(listOf(Gold, GoalioColors.TextSecondary, GoalioColors.TextTertiary)[i], 8f, Offset(origin.x + width * .2f, y))
         drawRoundRect(Color.White.copy(alpha = .2f), Offset(origin.x + width * .36f, y - 3f), Size(width * (.42f - i * .05f), 6f), androidx.compose.ui.geometry.CornerRadius(5f))
     }
 }

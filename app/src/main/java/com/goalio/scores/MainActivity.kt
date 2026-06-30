@@ -40,7 +40,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -227,15 +226,6 @@ fun SplashScreen() {
             Canvas(Modifier.fillMaxSize()) {
                 val center = Offset(size.width / 2f, size.height * .42f)
                 val radius = size.minDimension * .28f
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        listOf(GoalioColors.Accent.copy(alpha = .24f * pulse), Color.Transparent),
-                        center = center,
-                        radius = radius * 1.85f
-                    ),
-                    radius = radius * 1.85f,
-                    center = center
-                )
                 repeat(3) { ring ->
                     drawCircle(
                         color = Color.White.copy(alpha = .10f + ring * .04f),
@@ -255,7 +245,7 @@ fun SplashScreen() {
                         center.y + kotlin.math.sin(angle).toFloat() * radius * 1.1f
                     )
                     drawLine(
-                        color = if (index % 2 == 0) GoalioColors.Live else GoalioColors.Accent,
+                        color = if (index % 2 == 0) GoalioColors.TextPrimary else GoalioColors.TextSecondary,
                         start = start,
                         end = end,
                         strokeWidth = 3f,
@@ -263,7 +253,7 @@ fun SplashScreen() {
                     )
                 }
                 drawArc(
-                    color = GoalioColors.AccentHover.copy(alpha = .75f),
+                    color = GoalioColors.Accent,
                     startAngle = sweep,
                     sweepAngle = 80f,
                     useCenter = false,
@@ -337,7 +327,7 @@ private fun LoadingGoal(modifier: Modifier = Modifier) {
                 .width(trackWidth - 20.dp)
                 .size(height = 5.dp, width = trackWidth - 20.dp)
                 .clip(RoundedCornerShape(50))
-                .background(Color(0xFF656565))
+                .background(GoalioColors.ProgressBackground)
         )
         Box(
             Modifier

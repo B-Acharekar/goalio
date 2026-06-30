@@ -48,7 +48,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -624,7 +623,7 @@ private fun TeamCard(team: FavoriteTeam, selected: Boolean, modifier: Modifier =
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
                     Modifier.size(width = 48.dp, height = 34.dp).clip(RoundedCornerShape(5.dp))
-                        .background(Brush.verticalGradient(listOf(team.primaryColor.copy(alpha = .75f), team.primaryColor))),
+                        .background(GoalioColors.Surface3),
                     contentAlignment = Alignment.Center
                 ) {
                     if (team.imageUrl != null) {
@@ -635,7 +634,7 @@ private fun TeamCard(team: FavoriteTeam, selected: Boolean, modifier: Modifier =
                             modifier = Modifier.fillMaxSize()
                         )
                     } else {
-                        Text(team.shortName.take(1), color = if (team.shortName == "ENG") Color.Black else Color.White, fontSize = 16.sp, fontWeight = FontWeight.Black)
+                        Text(team.shortName.take(1), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Black)
                     }
                 }
                 Spacer(Modifier.height(9.dp))
@@ -643,7 +642,7 @@ private fun TeamCard(team: FavoriteTeam, selected: Boolean, modifier: Modifier =
             }
             if (selected) {
                 Box(Modifier.align(Alignment.TopEnd).size(20.dp).background(GoalioColors.Accent, CircleShape), contentAlignment = Alignment.Center) {
-                    CheckGlyph(Modifier.size(11.dp), GoalioColors.AccentPressed)
+                    CheckGlyph(Modifier.size(11.dp), GoalioColors.TextPrimary)
                 }
             }
         }
@@ -661,7 +660,7 @@ private fun PlayerCard(player: FavoritePlayer, selected: Boolean, onClick: () ->
         Column {
             Box(
                 Modifier.fillMaxWidth().height(160.dp)
-                    .background(Brush.radialGradient(listOf(player.accent.copy(alpha = .56f), GoalioColors.Background)))
+                    .background(GoalioColors.Black700)
             ) {
                 if (player.imageUrl != null) {
                     AsyncImage(
@@ -671,11 +670,11 @@ private fun PlayerCard(player: FavoritePlayer, selected: Boolean, onClick: () ->
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    PlayerSilhouette(Modifier.align(Alignment.BottomCenter).size(132.dp), player.accent)
+                    PlayerSilhouette(Modifier.align(Alignment.BottomCenter).size(132.dp), GoalioColors.TextSecondary)
                 }
                 Surface(
                     color = GoalioColors.Surface1.copy(alpha = .86f), shape = CircleShape,
-                    border = BorderStroke(1.dp, player.accent.copy(alpha = .8f)),
+                    border = BorderStroke(1.dp, GoalioColors.Border),
                     modifier = Modifier.align(Alignment.BottomStart).padding(12.dp).size(38.dp)
                 ) { Box(contentAlignment = Alignment.Center) { Text(player.initials, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) } }
             }
