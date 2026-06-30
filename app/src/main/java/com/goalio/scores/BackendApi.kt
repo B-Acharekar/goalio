@@ -26,7 +26,9 @@ data class BackendHome(val greeting: String, val profile: BackendProfile)
 object GoalioBackendApi {
     private val baseUrl: String
         get() = FirebaseRemoteConfig.getInstance().getString("backend_base_url")
-            .trim().trimEnd('/').ifBlank { "http://10.0.2.2:8000" }
+            .trim().trimEnd('/')
+            .takeIf { it.startsWith("https://") }
+            ?: BuildConfig.BACKEND_BASE_URL
 
     suspend fun saveProfile(draft: ProfileDraft): BackendProfile = request(
         method = "POST",

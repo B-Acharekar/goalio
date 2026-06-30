@@ -1,6 +1,7 @@
 package com.goalio.scores
 
 import android.app.Application
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings
 import com.onesignal.OneSignal
@@ -8,6 +9,11 @@ import com.onesignal.OneSignal
 class GoalioApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+
+        FirebaseCrashlytics.getInstance().apply {
+            setCrashlyticsCollectionEnabled(!BuildConfig.DEBUG)
+            setCustomKey("backend_base_url", BuildConfig.BACKEND_BASE_URL)
+        }
 
         FirebaseRemoteConfig.getInstance().apply {
             setConfigSettingsAsync(
@@ -20,10 +26,12 @@ class GoalioApplication : Application() {
                     "profile_setup_enabled" to true,
                     "profile_teams_limit" to 6L,
                     "profile_players_limit" to 6L,
-                    "backend_base_url" to "http://10.0.2.2:8000"
+                    "backend_base_url" to BuildConfig.BACKEND_BASE_URL
                 )
             )
-            fetchAndActivate()
+            fetchAndActivate().addOnFailureListener { error ->
+                FirebaseCrashlytics.getInstance().recordException(error)
+            }
         }
 
         val oneSignalAppId = getString(R.string.onesignal_app_id)
