@@ -2,6 +2,7 @@ package com.goalio.scores
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,14 +38,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.goalio.scores.ui.theme.GoalioColors
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
@@ -64,8 +65,11 @@ private val HomeLeagues = listOf(
 fun PersonalizedHomeScreen(
     fallbackName: String?,
     fallbackTeams: Set<String>,
-    fallbackPlayers: Set<String>
+    fallbackPlayers: Set<String>,
+    onOpenMatches: () -> Unit,
+    onOpenMatch: (ScheduleMatch) -> Unit
 ) {
+    val context = LocalContext.current
     var matches by remember { mutableStateOf(emptyList<ScheduleMatch>()) }
     var loading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -74,23 +78,27 @@ fun PersonalizedHomeScreen(
     val toDate = remember(today) { today.plusDays(7).toString() }
 
     LaunchedEffect(fromDate, toDate) {
-        loading = true
-        errorMessage = null
-        val loaded = coroutineScope {
-            HomeLeagues.map { league ->
-                async { runCatching { GoalioBackendApi.getScheduleRange(league, fromDate, toDate).matches } }
-            }.map { it.await() }
+        matches = MatchRepository.cachedFeed(context, fromDate, toDate)
+        loading = matches.isEmpty()
+        while (true) {
+            errorMessage = null
+            runCatching { MatchRepository.refreshFeed(context, fromDate, toDate) }
+                .onSuccess { result ->
+                    matches = result.matches
+                    if (result.scoreChanged) {
+                        android.widget.Toast.makeText(context, "Live score updated", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+                .onFailure {
+                    errorMessage = if (matches.isEmpty()) {
+                        it.message ?: "Could not load matches. Check the backend connection and try again."
+                    } else {
+                        null
+                    }
+                }
+            loading = false
+            delay(MatchRepository.nextRefreshDelayMillis(context, matches))
         }
-        val successful = loaded.mapNotNull { it.getOrNull() }
-        matches = successful
-            .flatten()
-            .distinctBy { "${it.league}:${it.matchId}" }
-            .sortedWith(compareBy<ScheduleMatch> { stateRank(it.state) }.thenBy { it.kickoff.orEmpty() })
-        if (successful.isEmpty() && loaded.any { it.isFailure }) {
-            errorMessage = loaded.firstNotNullOfOrNull { it.exceptionOrNull()?.message }
-                ?: "Could not load matches. Check the backend connection and try again."
-        }
-        loading = false
     }
 
     val liveMatches = matches.filter { it.state == "in" }
@@ -109,49 +117,49 @@ fun PersonalizedHomeScreen(
                 when {
                     loading -> HomeStateCard("Loading real match data...")
                     errorMessage != null -> HomeStateCard(errorMessage.orEmpty(), action = "Retry")
-                    featured != null -> FeaturedMatchCard(featured)
+                    featured != null -> FeaturedMatchCard(featured, onOpenMatch)
                     else -> HomeStateCard("No matches found from $fromDate to $toDate.")
                 }
             }
             if (!loading && errorMessage == null && matches.isNotEmpty()) {
                 item {
-                    SectionHeader("Live Action", "${liveMatches.size} live")
+                    SectionHeader("Live Action", "${liveMatches.size} live", onOpenMatches)
                     Spacer(Modifier.height(12.dp))
                     if (liveMatches.isEmpty()) {
                         MutedPill("No live matches right now")
                     } else {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                             items(liveMatches.take(6), key = { "${it.league}:${it.matchId}" }) {
-                                MatchMiniCard(it)
+                                MatchMiniCard(it, onOpenMatch)
                             }
                         }
                     }
                 }
                 item {
-                    SectionHeader("Upcoming", "${upcoming.size} next")
+                    SectionHeader("Upcoming", "${upcoming.size} next", onOpenMatches)
                     Spacer(Modifier.height(12.dp))
                     if (upcoming.isEmpty()) {
                         MutedPill("No upcoming fixtures in this window")
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            upcoming.take(6).forEach { ScheduleRow(it) }
+                            upcoming.take(6).forEach { ScheduleRow(it, onOpenMatch) }
                         }
                     }
                 }
                 item {
-                    SectionHeader("Finished", "${finished.size} recent")
+                    SectionHeader("Finished", "${finished.size} recent", onOpenMatches)
                     Spacer(Modifier.height(12.dp))
                     if (finished.isEmpty()) {
                         MutedPill("No finished matches in this window")
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            finished.take(4).forEach { ScheduleRow(it) }
+                            finished.take(4).forEach { ScheduleRow(it, onOpenMatch) }
                         }
                     }
                 }
             }
         }
-        HomeBottomNav(Modifier.align(Alignment.BottomCenter))
+        HomeBottomNav(Modifier.align(Alignment.BottomCenter), onOpenMatches)
     }
 }
 
@@ -166,7 +174,7 @@ private fun HomeTopBar() {
 }
 
 @Composable
-private fun FeaturedMatchCard(match: ScheduleMatch) {
+private fun FeaturedMatchCard(match: ScheduleMatch, onOpenMatch: (ScheduleMatch) -> Unit) {
     Surface(
         color = GoalioColors.Surface1,
         shape = RoundedCornerShape(24.dp),
@@ -194,7 +202,7 @@ private fun FeaturedMatchCard(match: ScheduleMatch) {
             }
             Spacer(Modifier.height(22.dp))
             Button(
-                onClick = { },
+                onClick = { onOpenMatch(match) },
                 colors = ButtonDefaults.buttonColors(containerColor = GoalioColors.Accent, contentColor = GoalioColors.TextPrimary),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth().height(56.dp)
@@ -228,20 +236,20 @@ private fun TeamBadge(team: MatchTeamInfo?, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SectionHeader(title: String, action: String) {
+private fun SectionHeader(title: String, action: String, onAction: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(title, color = GoalioColors.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
-        Text(action, color = GoalioColors.TextTertiary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Text(action, color = GoalioColors.TextTertiary, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onAction))
     }
 }
 
 @Composable
-private fun MatchMiniCard(match: ScheduleMatch) {
+private fun MatchMiniCard(match: ScheduleMatch, onOpenMatch: (ScheduleMatch) -> Unit) {
     Surface(
         color = GoalioColors.Surface1,
         shape = RoundedCornerShape(18.dp),
         border = BorderStroke(1.dp, GoalioColors.CardBorder),
-        modifier = Modifier.width(230.dp).height(136.dp)
+        modifier = Modifier.width(230.dp).height(136.dp).clickable { onOpenMatch(match) }
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -256,12 +264,12 @@ private fun MatchMiniCard(match: ScheduleMatch) {
 }
 
 @Composable
-private fun ScheduleRow(match: ScheduleMatch) {
+private fun ScheduleRow(match: ScheduleMatch, onOpenMatch: (ScheduleMatch) -> Unit) {
     Surface(
         color = GoalioColors.Surface1,
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, GoalioColors.CardBorder),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().clickable { onOpenMatch(match) }
     ) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.width(78.dp)) {
@@ -335,7 +343,7 @@ private fun MutedPill(text: String) {
 }
 
 @Composable
-private fun HomeBottomNav(modifier: Modifier = Modifier) {
+private fun HomeBottomNav(modifier: Modifier = Modifier, onOpenMatches: () -> Unit) {
     Surface(
         color = GoalioColors.Navigation,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
@@ -343,8 +351,8 @@ private fun HomeBottomNav(modifier: Modifier = Modifier) {
         modifier = modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
         Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
-            BottomTab("Home", true)
-            BottomTab("Matches", false)
+            BottomTab("Home", true) {}
+            BottomTab("Matches", false, onOpenMatches)
             BottomTab("World Cup", false)
             BottomTab("Games", false)
         }
@@ -352,12 +360,13 @@ private fun HomeBottomNav(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun RowScope.BottomTab(label: String, selected: Boolean) {
-    val bg = if (selected) GoalioColors.Accent else Color.Transparent
+private fun RowScope.BottomTab(label: String, selected: Boolean, onClick: () -> Unit = {}) {
     val fg = if (selected) GoalioColors.TextPrimary else GoalioColors.InactiveIcon
-    Surface(color = bg, shape = RoundedCornerShape(50), modifier = Modifier.weight(1f).height(50.dp)) {
-        Box(contentAlignment = Alignment.Center) {
+    Surface(color = Color.Transparent, shape = RoundedCornerShape(50), modifier = Modifier.weight(1f).height(50.dp).clickable(onClick = onClick)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text(label, color = fg, fontSize = 11.sp, fontWeight = FontWeight.Black)
+            Spacer(Modifier.height(5.dp))
+            Box(Modifier.width(24.dp).height(3.dp).background(if (selected) GoalioColors.Accent else Color.Transparent, RoundedCornerShape(50)))
         }
     }
 }
@@ -399,11 +408,4 @@ private fun statusColor(state: String?): Color = when (state) {
     "pre" -> GoalioColors.Upcoming
     "post" -> GoalioColors.Finished
     else -> GoalioColors.TextTertiary
-}
-
-private fun stateRank(state: String?): Int = when (state) {
-    "in" -> 0
-    "pre" -> 1
-    "post" -> 2
-    else -> 3
 }

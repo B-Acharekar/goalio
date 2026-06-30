@@ -87,6 +87,8 @@ class MainActivity : ComponentActivity() {
                 var profileComplete by remember {
                     mutableStateOf(settings.getBoolean("profile_complete", false))
                 }
+                var appScreen by remember { mutableStateOf("home") }
+                var selectedMatch by remember { mutableStateOf<ScheduleMatch?>(null) }
                 val notificationLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
                 ) { }
@@ -173,11 +175,46 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     )
-                    else -> PersonalizedHomeScreen(
-                        fallbackName = settings.getString("profile_full_name", null),
-                        fallbackTeams = settings.getStringSet("profile_team_names", emptySet()).orEmpty(),
-                        fallbackPlayers = settings.getStringSet("profile_player_names", emptySet()).orEmpty()
-                    )
+                    else -> when (appScreen) {
+                        "matches" -> MatchScreen(
+                            onBack = { appScreen = "home" },
+                            onOpenHome = { appScreen = "home" },
+                            onOpenMatch = { match ->
+                                selectedMatch = match
+                                appScreen = "detail"
+                            }
+                        )
+                        "detail" -> selectedMatch?.let { match ->
+                            MatchDetailScreen(
+                                league = match.league,
+                                matchId = match.matchId,
+                                initialMatch = match,
+                                onBack = { appScreen = "matches" },
+                                onOpenHome = { appScreen = "home" },
+                                onOpenMatches = { appScreen = "matches" }
+                            )
+                        } ?: run {
+                            appScreen = "matches"
+                            MatchScreen(
+                                onBack = { appScreen = "home" },
+                                onOpenHome = { appScreen = "home" },
+                                onOpenMatch = { match ->
+                                    selectedMatch = match
+                                    appScreen = "detail"
+                                }
+                            )
+                        }
+                        else -> PersonalizedHomeScreen(
+                            fallbackName = settings.getString("profile_full_name", null),
+                            fallbackTeams = settings.getStringSet("profile_team_names", emptySet()).orEmpty(),
+                            fallbackPlayers = settings.getStringSet("profile_player_names", emptySet()).orEmpty(),
+                            onOpenMatches = { appScreen = "matches" },
+                            onOpenMatch = { match ->
+                                selectedMatch = match
+                                appScreen = "detail"
+                            }
+                        )
+                    }
                 }
             }
         }

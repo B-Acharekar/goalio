@@ -56,6 +56,44 @@ data class ScheduleMatch(
 
 data class MatchSchedule(val league: String, val date: String?, val matches: List<ScheduleMatch>)
 
+data class MatchStat(val name: String?, val label: String?, val value: String?)
+
+data class TeamStatsBlock(val teamId: String?, val stats: List<MatchStat>)
+
+data class MatchLeaderPlayer(
+    val id: String?,
+    val name: String?,
+    val position: String?,
+    val jersey: String?,
+    val espnUrl: String?,
+    val mainStat: String?,
+    val stats: List<MatchStat>
+)
+
+data class MatchLeaderGroup(val category: String?, val players: List<MatchLeaderPlayer>)
+
+data class MatchTimelineEvent(
+    val minute: String?,
+    val type: String?,
+    val text: String?,
+    val team: String?
+)
+
+data class MatchDetail(
+    val matchId: String,
+    val league: String,
+    val status: String?,
+    val statusDescription: String?,
+    val kickoff: String?,
+    val homeTeam: MatchTeamInfo?,
+    val awayTeam: MatchTeamInfo?,
+    val venue: MatchVenueInfo?,
+    val teamStats: List<TeamStatsBlock>,
+    val playerLeaders: List<MatchLeaderGroup>,
+    val events: List<MatchTimelineEvent>,
+    val summary: String?
+)
+
 object GoalioBackendApi {
     private val baseUrl: String
         get() = FirebaseRemoteConfig.getInstance().getString("backend_base_url")
@@ -128,6 +166,10 @@ object GoalioBackendApi {
     suspend fun getScheduleRange(league: String, from: String, to: String): MatchSchedule = request(
         "GET", "/api/v1/matches/${encodePath(league)}/schedule?from=${encode(from)}&to=${encode(to)}"
     ) { json -> json.toMatchSchedule() }
+
+    suspend fun getMatchDetail(league: String, eventId: String): MatchDetail = request(
+        "GET", "/api/v1/matches/${encodePath(league)}/${encodePath(eventId)}/detail"
+    ) { json -> json.toMatchDetail() }
 
     private suspend fun <T> request(
         method: String,
@@ -261,6 +303,64 @@ object GoalioBackendApi {
         name = nullableString("name"),
         city = nullableString("city")
     )
+
+    private fun JSONObject.toMatchDetail() = MatchDetail(
+        matchId = getString("matchId"),
+        league = getString("league"),
+        status = nullableString("status"),
+        statusDescription = nullableString("statusDescription"),
+        kickoff = nullableString("kickoff"),
+        homeTeam = optJSONObject("homeTeam")?.toMatchTeamInfo(),
+        awayTeam = optJSONObject("awayTeam")?.toMatchTeamInfo(),
+        venue = optJSONObject("venue")?.toMatchVenueInfo(),
+        teamStats = optJSONArray("teamStats").toTeamStatsBlocks(),
+        playerLeaders = optJSONArray("playerLeaders").toLeaderGroups(),
+        events = optJSONArray("events").toTimelineEvents(),
+        summary = nullableString("summary")
+    )
+
+    private fun JSONArray?.toTeamStatsBlocks(): List<TeamStatsBlock> = buildList {
+        if (this@toTeamStatsBlocks != null) for (index in 0 until length()) getJSONObject(index).run {
+            add(TeamStatsBlock(nullableString("teamId"), optJSONArray("stats").toMatchStats()))
+        }
+    }
+
+    private fun JSONArray?.toMatchStats(): List<MatchStat> = buildList {
+        if (this@toMatchStats != null) for (index in 0 until length()) getJSONObject(index).run {
+            add(MatchStat(nullableString("name"), nullableString("label"), nullableString("value")))
+        }
+    }
+
+    private fun JSONArray?.toLeaderGroups(): List<MatchLeaderGroup> = buildList {
+        if (this@toLeaderGroups != null) for (index in 0 until length()) getJSONObject(index).run {
+            add(MatchLeaderGroup(nullableString("category"), optJSONArray("players").toLeaderPlayers()))
+        }
+    }
+
+    private fun JSONArray?.toLeaderPlayers(): List<MatchLeaderPlayer> = buildList {
+        if (this@toLeaderPlayers != null) for (index in 0 until length()) getJSONObject(index).run {
+            add(MatchLeaderPlayer(
+                id = nullableString("id"),
+                name = nullableString("name"),
+                position = nullableString("position"),
+                jersey = nullableString("jersey"),
+                espnUrl = nullableString("espnUrl"),
+                mainStat = nullableString("mainStat"),
+                stats = optJSONArray("stats").toMatchStats()
+            ))
+        }
+    }
+
+    private fun JSONArray?.toTimelineEvents(): List<MatchTimelineEvent> = buildList {
+        if (this@toTimelineEvents != null) for (index in 0 until length()) getJSONObject(index).run {
+            add(MatchTimelineEvent(
+                minute = nullableString("minute"),
+                type = nullableString("type"),
+                text = nullableString("text"),
+                team = nullableString("team")
+            ))
+        }
+    }
 
     private fun competitionIdFromTeamId(id: String): Int? = when {
         "fifa.world" in id -> 1
