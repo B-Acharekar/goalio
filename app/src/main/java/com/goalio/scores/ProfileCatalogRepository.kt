@@ -23,10 +23,10 @@ object ProfileCatalogRepository {
 
             // Loading teams first also establishes the anonymous Firebase session before
             // the parallel player requests begin.
-            val teams = GoalioBackendApi.getTeams(limit = 200).items
+            val teams = GoalioBackendApi.getTeams(limit = 6).items
             require(teams.isNotEmpty()) { "No teams are available" }
 
-            val catalogPlayers = GoalioBackendApi.getPlayers(limit = 100).items
+            val catalogPlayers = GoalioBackendApi.getPlayers(limit = 6).items
             val players = catalogPlayers
                 .distinctBy { it.id }
                 .map { it.withCompetitionIds(teams) }

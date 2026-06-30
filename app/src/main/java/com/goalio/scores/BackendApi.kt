@@ -74,12 +74,12 @@ object GoalioBackendApi {
         )
     }
 
-    suspend fun searchTeams(query: String): List<FavoriteTeam> = request(
-        "GET", "/api/v1/football/teams/search?q=${encode(query)}"
+    suspend fun searchTeams(query: String, limit: Int = 6): List<FavoriteTeam> = request(
+        "GET", "/api/v1/football/teams/search?q=${encode(query)}&limit=${limit.coerceIn(1, 20)}"
     ) { it.getJSONArray("items").toTeamList() }
 
-    suspend fun searchPlayers(query: String): List<FavoritePlayer> = request(
-        "GET", "/api/v1/football/players/search?q=${encode(query)}"
+    suspend fun searchPlayers(query: String, limit: Int = 6): List<FavoritePlayer> = request(
+        "GET", "/api/v1/football/players/search?q=${encode(query)}&limit=${limit.coerceIn(1, 20)}"
     ) { it.getJSONArray("items").toPlayerList() }
 
     private suspend fun <T> request(
