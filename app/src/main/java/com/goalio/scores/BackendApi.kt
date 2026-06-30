@@ -12,6 +12,7 @@ import java.net.URL
 import java.net.URLEncoder
 
 data class BackendProfile(
+    val userId: String,
     val name: String,
     val username: String,
     val favoriteTeams: List<String>,
@@ -44,6 +45,10 @@ object GoalioBackendApi {
     suspend fun getHome(): BackendHome = request("GET", "/api/v1/home") { json ->
         BackendHome(json.getString("greeting"), parseProfile(json.getJSONObject("profile")))
     }
+
+    suspend fun isUsernameAvailable(username: String): Boolean = request(
+        "GET", "/api/v1/users/username/availability?username=${encode(username)}"
+    ) { it.getBoolean("available") }
 
     suspend fun searchTeams(query: String): List<FavoriteTeam> = request(
         "GET", "/api/v1/football/teams/search?q=${encode(query)}"
@@ -93,6 +98,7 @@ object GoalioBackendApi {
     }
 
     private fun parseProfile(json: JSONObject) = BackendProfile(
+        userId = json.getString("userId"),
         name = json.getString("name"),
         username = json.getString("username"),
         favoriteTeams = json.optJSONArray("favoriteTeams").toStrings(),

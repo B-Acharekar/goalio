@@ -130,8 +130,12 @@ fun ProfileSetupScreen(
     var playerCatalog by remember { mutableStateOf(DemoFavoritesRepository.players) }
     var submitting by remember { mutableStateOf(false) }
     var submitError by remember { mutableStateOf<String?>(null) }
+    var usernameAvailable by remember { mutableStateOf<Boolean?>(null) }
+    var checkingUsername by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val valid = fullName.trim().length >= 2 && username.length >= 3
+    val fullNameValid = isValidFullName(fullName)
+    val usernameRuleValid = isValidUsername(username)
+    val valid = fullNameValid && usernameAvailable == true
     val teams = remember(teamQuery, teamCatalog) {
         teamCatalog.filter { it.name.contains(teamQuery, true) }
     }
@@ -152,6 +156,15 @@ fun ProfileSetupScreen(
         runCatching { GoalioBackendApi.searchPlayers(playerQuery) }.onSuccess { results ->
             playerCatalog = (playerCatalog + results).distinctBy { it.id }
         }
+    }
+    LaunchedEffect(username) {
+        usernameAvailable = null
+        checkingUsername = false
+        if (!usernameRuleValid) return@LaunchedEffect
+        delay(350)
+        checkingUsername = true
+        usernameAvailable = runCatching { GoalioBackendApi.isUsernameAvailable(username) }.getOrNull()
+        checkingUsername = false
     }
 
     BackHandler(onBack = onBack)
@@ -175,15 +188,28 @@ fun ProfileSetupScreen(
                             Text("Make Goalio yours. You can change these anytime.", color = Muted, fontSize = 14.sp, lineHeight = 20.sp)
                             Spacer(Modifier.height(24.dp))
                             LabeledInput("FULL NAME", "e.g., Alex Morgan", fullName, { fullName = it }, true)
+                            if (fullName.isNotBlank() && !fullNameValid) {
+                                FieldMessage("Enter first and last name; every name must have at least 2 letters.", false)
+                            }
                             Spacer(Modifier.height(18.dp))
                             LabeledInput(
                                 "PICK YOUR USERNAME",
                                 "e.g., GoalGetter99",
                                 username,
-                                { value -> username = value.filter { it.isLetterOrDigit() || it == '_' }.take(20) },
+                                { value ->
+                                    username = value.lowercase().filter { it in 'a'..'z' || it.isDigit() || it == '_' }.take(20)
+                                },
                                 false,
-                                showValid = username.length >= 3
+                                showValid = usernameAvailable == true
                             )
+                            when {
+                                username.isBlank() -> Unit
+                                !usernameRuleValid -> FieldMessage("3–20 characters; start with a letter. Use letters, numbers, or single underscores.", false)
+                                checkingUsername -> FieldMessage("Checking username…", true)
+                                usernameAvailable == true -> FieldMessage("Username is available", true)
+                                usernameAvailable == false -> FieldMessage("That username is already taken", false)
+                                else -> FieldMessage("Could not check username. Verify the backend connection.", false)
+                            }
                             Spacer(Modifier.height(30.dp))
                             Text("Follow your favorites", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
                             Text("Get live updates for the teams you love.", color = Color(0xFFD0CFD0), fontSize = 15.sp)
@@ -332,6 +358,30 @@ private fun LabeledInput(
             }
         }
     }
+}
+
+@Composable
+private fun FieldMessage(text: String, success: Boolean) {
+    Text(
+        text,
+        color = if (success) Color(0xFF64D98B) else Color(0xFFFF8A80),
+        fontSize = 11.sp,
+        modifier = Modifier.padding(start = 4.dp, top = 6.dp)
+    )
+}
+
+private fun isValidFullName(value: String): Boolean {
+    val parts = value.trim().split(Regex("\\s+")).filter(String::isNotBlank)
+    return parts.size >= 2 && parts.all { part ->
+        val letters = part.replace("-", "").replace("'", "")
+        letters.length >= 2 && letters.all(Char::isLetter)
+    }
+}
+
+private fun isValidUsername(value: String): Boolean {
+    if (!Regex("[a-z][a-z0-9_]{2,19}").matches(value)) return false
+    if (value.endsWith('_') || "__" in value) return false
+    return value !in setOf("admin", "administrator", "goalio", "support", "moderator", "root", "system")
 }
 
 @Composable
