@@ -61,6 +61,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.goalio.scores.ui.theme.GoalioColors
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -92,10 +93,10 @@ data class ProfileDraft(
     val playerIds: Set<String>
 )
 
-private val Gold = Color(0xFF897846)
-private val Panel = Color(0xF2131514)
-private val Field = Color(0xFF202322)
-private val Muted = Color(0xFFAAA9AA)
+private val Gold = GoalioColors.Accent
+private val Panel = GoalioColors.Surface1
+private val Field = GoalioColors.Surface2
+private val Muted = GoalioColors.TextSecondary
 private data class CompetitionFilter(val label: String, val id: Int?)
 private val CompetitionFilters = listOf(
     CompetitionFilter("All", null),
@@ -228,13 +229,13 @@ fun ProfileSetupScreen(
                 item {
                     Surface(
                         color = Panel,
-                        border = BorderStroke(1.dp, Color(0xFF303231)),
-                        shape = RoundedCornerShape(22.dp),
+                        border = BorderStroke(1.dp, GoalioColors.CardBorder),
+                        shape = RoundedCornerShape(24.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(Modifier.padding(20.dp)) {
                             Text("Set up your profile", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                            Text("Make Goalio yours. You can change these anytime.", color = Muted, fontSize = 14.sp, lineHeight = 20.sp)
+                            Text("Make Goalio yours. You can change these anytime.", color = GoalioColors.Body, fontSize = 14.sp, lineHeight = 20.sp)
                             Spacer(Modifier.height(24.dp))
                             LabeledInput("FULL NAME", "e.g., Alex Morgan", fullName, { fullName = it }, true)
                             if (fullName.isNotBlank() && !fullNameValid) {
@@ -261,7 +262,7 @@ fun ProfileSetupScreen(
                             }
                             Spacer(Modifier.height(30.dp))
                             Text("Follow your favorites", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-                            Text("Get live updates for the teams you love.", color = Color(0xFFD0CFD0), fontSize = 15.sp)
+                            Text("Get live updates for the teams you love.", color = GoalioColors.Body, fontSize = 15.sp)
                             if (catalogLoading) {
                                 FieldMessage("Loading teams and players...", true)
                             }
@@ -427,12 +428,12 @@ fun ProfileSetupScreen(
                     }
                 }
             }
-            Surface(color = Color(0xF2131413), border = BorderStroke(1.dp, Color(0xFF3A3529))) {
+            Surface(color = GoalioColors.Surface1, border = BorderStroke(1.dp, GoalioColors.CardBorder)) {
                 Column {
                     if (submitError != null) {
                         Text(
                             submitError.orEmpty(),
-                            color = Color(0xFFFF8A80),
+                            color = GoalioColors.Error,
                             fontSize = 12.sp,
                             modifier = Modifier.padding(horizontal = 26.dp, vertical = 4.dp)
                         )
@@ -464,10 +465,10 @@ fun ProfileSetupScreen(
                         },
                         modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 22.dp, vertical = 16.dp).height(58.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White,
-                            contentColor = Color.Black,
-                            disabledContainerColor = Color(0xFF454545),
-                            disabledContentColor = Color(0xFF999999)
+                            containerColor = GoalioColors.Accent,
+                            contentColor = GoalioColors.TextPrimary,
+                            disabledContainerColor = GoalioColors.Disabled,
+                            disabledContentColor = GoalioColors.TextTertiary
                         ),
                         shape = RoundedCornerShape(50)
                     ) {
@@ -505,15 +506,15 @@ private fun LabeledInput(
     showValid: Boolean = false
 ) {
     Column {
-        Text(label, color = Color(0xFFDADADA), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
+        Text(label, color = GoalioColors.Caption, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
         Spacer(Modifier.height(7.dp))
         Row(
             Modifier.fillMaxWidth().height(60.dp).background(Field, RoundedCornerShape(13.dp))
-                .border(1.dp, if (showValid) Gold else Color(0xFF565149), RoundedCornerShape(13.dp)).padding(horizontal = 16.dp),
+                .border(1.dp, if (showValid) Gold else GoalioColors.Border, RoundedCornerShape(13.dp)).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(Modifier.weight(1f)) {
-                if (value.isEmpty()) Text(hint, color = Color(0xFF77736B), fontSize = 16.sp)
+                if (value.isEmpty()) Text(hint, color = GoalioColors.Placeholder, fontSize = 16.sp)
                 BasicTextField(
                     value = value,
                     onValueChange = onValueChange,
@@ -524,8 +525,8 @@ private fun LabeledInput(
                 )
             }
             if (showValid) {
-                Box(Modifier.size(24.dp).background(Color(0xFF28C76F), CircleShape), contentAlignment = Alignment.Center) {
-                    CheckGlyph(Modifier.size(13.dp), Color(0xFF07180E))
+                Box(Modifier.size(24.dp).background(GoalioColors.Success, CircleShape), contentAlignment = Alignment.Center) {
+                    CheckGlyph(Modifier.size(13.dp), GoalioColors.Background)
                 }
             }
         }
@@ -536,7 +537,7 @@ private fun LabeledInput(
 private fun FieldMessage(text: String, success: Boolean) {
     Text(
         text,
-        color = if (success) Color(0xFF64D98B) else Color(0xFFFF8A80),
+        color = if (success) GoalioColors.Success else GoalioColors.Error,
         fontSize = 11.sp,
         modifier = Modifier.padding(start = 4.dp, top = 6.dp)
     )
@@ -566,14 +567,14 @@ private fun Throwable.userFacingBackendMessage(prefix: String): String {
 @Composable
 private fun SearchInput(hint: String, value: String, onValueChange: (String) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().height(54.dp).background(Color.Black, RoundedCornerShape(50))
-            .border(1.dp, Color(0xFF62583D), RoundedCornerShape(50)).padding(horizontal = 17.dp),
+        Modifier.fillMaxWidth().height(54.dp).background(GoalioColors.Search, RoundedCornerShape(50))
+            .border(1.dp, GoalioColors.Border, RoundedCornerShape(50)).padding(horizontal = 17.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        SearchGlyph(Modifier.size(21.dp), Color(0xFFE5E5E5))
+        SearchGlyph(Modifier.size(21.dp), GoalioColors.Icon)
         Spacer(Modifier.width(13.dp))
         Box(Modifier.weight(1f)) {
-            if (value.isEmpty()) Text(hint, color = Color(0xFF777A86), fontSize = 15.sp)
+            if (value.isEmpty()) Text(hint, color = GoalioColors.Placeholder, fontSize = 15.sp)
             BasicTextField(value, onValueChange, singleLine = true, textStyle = TextStyle(Color.White, 15.sp), modifier = Modifier.fillMaxWidth())
         }
     }
@@ -586,9 +587,9 @@ private fun CompetitionFilterRow(selectedId: Int?, onSelected: (Int?) -> Unit) {
             val selected = competition.id == selectedId
             Surface(
                 onClick = { onSelected(competition.id) },
-                color = if (selected) Color.White else Color(0xFF242625),
-                contentColor = if (selected) Color.Black else Color.White,
-                border = BorderStroke(1.dp, if (selected) Color.White else Color(0xFF62583D)),
+                color = if (selected) GoalioColors.Accent else GoalioColors.Surface2,
+                contentColor = GoalioColors.TextPrimary,
+                border = BorderStroke(1.dp, if (selected) GoalioColors.Accent else GoalioColors.Border),
                 shape = RoundedCornerShape(50)
             ) {
                 Text(
@@ -614,9 +615,9 @@ private fun SelectionChip(label: String, onRemove: () -> Unit) {
 private fun TeamCard(team: FavoriteTeam, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        color = Color(0xFF292C2B),
-        shape = RoundedCornerShape(15.dp),
-        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) Color.White else Color(0xFF5D543A)),
+        color = GoalioColors.Surface2,
+        shape = RoundedCornerShape(24.dp),
+        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) GoalioColors.Accent else GoalioColors.CardBorder),
         modifier = modifier.height(112.dp)
     ) {
         Box(Modifier.padding(12.dp)) {
@@ -641,8 +642,8 @@ private fun TeamCard(team: FavoriteTeam, selected: Boolean, modifier: Modifier =
                 Text(team.name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             }
             if (selected) {
-                Box(Modifier.align(Alignment.TopEnd).size(20.dp).background(Color.White, CircleShape), contentAlignment = Alignment.Center) {
-                    CheckGlyph(Modifier.size(11.dp), Color(0xFF6C5C2F))
+                Box(Modifier.align(Alignment.TopEnd).size(20.dp).background(GoalioColors.Accent, CircleShape), contentAlignment = Alignment.Center) {
+                    CheckGlyph(Modifier.size(11.dp), GoalioColors.AccentPressed)
                 }
             }
         }
@@ -652,15 +653,15 @@ private fun TeamCard(team: FavoriteTeam, selected: Boolean, modifier: Modifier =
 @Composable
 private fun PlayerCard(player: FavoritePlayer, selected: Boolean, onClick: () -> Unit) {
     Surface(
-        color = Color(0xFF292C2B),
-        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) Color.White else Color(0xFF62583D)),
-        shape = RoundedCornerShape(16.dp),
+        color = GoalioColors.Surface2,
+        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) GoalioColors.Accent else GoalioColors.Border),
+        shape = RoundedCornerShape(24.dp),
         modifier = Modifier.width(210.dp)
     ) {
         Column {
             Box(
                 Modifier.fillMaxWidth().height(160.dp)
-                    .background(Brush.radialGradient(listOf(player.accent.copy(alpha = .56f), Color(0xFF090B0B))))
+                    .background(Brush.radialGradient(listOf(player.accent.copy(alpha = .56f), GoalioColors.Background)))
             ) {
                 if (player.imageUrl != null) {
                     AsyncImage(
@@ -673,7 +674,7 @@ private fun PlayerCard(player: FavoritePlayer, selected: Boolean, onClick: () ->
                     PlayerSilhouette(Modifier.align(Alignment.BottomCenter).size(132.dp), player.accent)
                 }
                 Surface(
-                    color = Color(0xD90D0F0F), shape = CircleShape,
+                    color = GoalioColors.Surface1.copy(alpha = .86f), shape = CircleShape,
                     border = BorderStroke(1.dp, player.accent.copy(alpha = .8f)),
                     modifier = Modifier.align(Alignment.BottomStart).padding(12.dp).size(38.dp)
                 ) { Box(contentAlignment = Alignment.Center) { Text(player.initials, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) } }
@@ -684,9 +685,9 @@ private fun PlayerCard(player: FavoritePlayer, selected: Boolean, onClick: () ->
                 Spacer(Modifier.height(10.dp))
                 Surface(
                     onClick = onClick,
-                    color = if (selected) Color.White else Color.Transparent,
-                    contentColor = if (selected) Color.Black else Color.White,
-                    border = BorderStroke(1.dp, Color.White),
+                    color = if (selected) GoalioColors.Accent else Color.Transparent,
+                    contentColor = GoalioColors.TextPrimary,
+                    border = BorderStroke(1.dp, if (selected) GoalioColors.Accent else GoalioColors.Border),
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth().height(39.dp)
                 ) {

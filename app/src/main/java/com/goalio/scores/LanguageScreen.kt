@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.goalio.scores.ui.theme.GoalioColors
 
 private data class LanguageOption(
     val tag: String, val name: String, val subtitle: String, val badge: String
@@ -55,12 +56,12 @@ fun LanguageScreen(onBack: () -> Unit, onDone: (String) -> Unit) {
                     letterSpacing = 5.sp, modifier = Modifier.weight(1f))
                 Button(
                     onClick = { onDone(selected) },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                    colors = ButtonDefaults.buttonColors(containerColor = GoalioColors.Accent, contentColor = GoalioColors.TextPrimary),
                     shape = RoundedCornerShape(50),
                     contentPadding = PaddingValues(horizontal = 25.dp, vertical = 10.dp)
                 ) { Text("DONE", fontWeight = FontWeight.Bold, letterSpacing = 1.sp) }
             }
-            HorizontalDivider(color = Color(0xFF29261F))
+            HorizontalDivider(color = GoalioColors.Divider)
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
@@ -71,11 +72,11 @@ fun LanguageScreen(onBack: () -> Unit, onDone: (String) -> Unit) {
                     Text("Select Language", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(5.dp))
                     Text("Personalize your experience with your preferred language.",
-                        color = Color(0xFFAAA298), fontSize = 16.sp, lineHeight = 22.sp)
+                        color = GoalioColors.Body, fontSize = 16.sp, lineHeight = 22.sp)
                     Spacer(Modifier.height(28.dp))
                     SearchBox(query) { query = it }
                     Spacer(Modifier.height(17.dp))
-                    Text("DEVICE SETTING", color = Color(0xFFDDDDDD), fontSize = 13.sp,
+                    Text("DEVICE SETTING", color = GoalioColors.Caption, fontSize = 13.sp,
                         fontWeight = FontWeight.Bold, letterSpacing = 2.sp, modifier = Modifier.padding(start = 4.dp))
                     Spacer(Modifier.height(9.dp))
                     LanguageCard(
@@ -101,15 +102,15 @@ private fun SearchBox(value: String, onValueChange: (String) -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Surface(
-            color = Color.Transparent, shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, Color(0xFF7B8494)),
+            color = GoalioColors.Search, shape = RoundedCornerShape(14.dp),
+            border = BorderStroke(1.dp, GoalioColors.Border),
             modifier = Modifier.fillMaxSize()
         ) {
             Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("⌕", color = Color.White, fontSize = 32.sp)
                 Spacer(Modifier.width(12.dp))
                 Box(Modifier.weight(1f)) {
-                    if (value.isEmpty()) Text("Search language...", color = Color(0xFFD0CDD0), fontSize = 18.sp)
+                    if (value.isEmpty()) Text("Search language...", color = GoalioColors.Placeholder, fontSize = 18.sp)
                     BasicTextField(value, onValueChange, singleLine = true,
                         textStyle = TextStyle(color = Color.White, fontSize = 18.sp), modifier = Modifier.fillMaxWidth())
                 }
@@ -122,16 +123,16 @@ private fun SearchBox(value: String, onValueChange: (String) -> Unit) {
 private fun LanguageCard(language: LanguageOption, selected: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        color = Color(0xE8171919),
-        shape = RoundedCornerShape(14.dp),
+        color = GoalioColors.Surface1,
+        shape = RoundedCornerShape(24.dp),
         border = BorderStroke(if (selected) 1.5.dp else 1.dp,
-            if (selected) Color.White else Color(0xFF303434)),
+            if (selected) GoalioColors.Accent else GoalioColors.CardBorder),
         modifier = Modifier.fillMaxWidth().height(86.dp)
     ) {
         Row(Modifier.padding(horizontal = 17.dp), verticalAlignment = Alignment.CenterVertically) {
             Surface(
-                shape = CircleShape, color = Color.Black,
-                border = BorderStroke(1.dp, Color(0xFF282828)), modifier = Modifier.size(48.dp)
+                shape = CircleShape, color = GoalioColors.Background,
+                border = BorderStroke(1.dp, GoalioColors.Border), modifier = Modifier.size(48.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(language.badge, color = Color.White, fontSize = if (language.badge.length > 3) 20.sp else 13.sp,
@@ -140,9 +141,9 @@ private fun LanguageCard(language: LanguageOption, selected: Boolean, onClick: (
             }
             Spacer(Modifier.width(18.dp))
             Column(Modifier.weight(1f)) {
-                Text(language.name, color = Color(0xFFF0EEF1), fontSize = 22.sp,
+                Text(language.name, color = GoalioColors.TextPrimary, fontSize = 22.sp,
                     fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(language.subtitle, color = Color(0xFFCFCCCF), fontSize = 15.sp,
+                Text(language.subtitle, color = GoalioColors.TextSecondary, fontSize = 15.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (selected) {

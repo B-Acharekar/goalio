@@ -10,6 +10,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import com.goalio.scores.ui.theme.GoalioColors
 
 data class BackendProfile(
     val userId: String,
@@ -267,12 +268,10 @@ object GoalioBackendApi {
         else -> null
     }
 
-    private fun resultColor(id: String) = when (id) {
-        "arg", "messi" -> androidx.compose.ui.graphics.Color(0xFF75B9E7)
-        "bra", "neymar" -> androidx.compose.ui.graphics.Color(0xFFF7D34A)
-        "fra", "mbappe" -> androidx.compose.ui.graphics.Color(0xFF3159A7)
-        "por", "ronaldo" -> androidx.compose.ui.graphics.Color(0xFF2B9A62)
-        else -> androidx.compose.ui.graphics.Color(0xFFB0B0B0)
+    private fun resultColor(id: String) = when {
+        id.contains("live", ignoreCase = true) -> GoalioColors.Live
+        id.contains("win", ignoreCase = true) -> GoalioColors.Positive
+        else -> GoalioColors.Accent
     }
 
     private fun pagedPath(path: String, limit: Int, cursor: String?): String = buildString {

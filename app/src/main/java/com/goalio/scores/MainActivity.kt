@@ -57,6 +57,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.unit.dp
 import com.goalio.scores.ui.theme.GoalioTheme
+import com.goalio.scores.ui.theme.GoalioColors
 import com.onesignal.OneSignal
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -200,7 +201,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun GoalioBackground(backgroundAlpha: Float = 1f, content: @Composable BoxScope.() -> Unit) {
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(Modifier.fillMaxSize().background(GoalioColors.Background)) {
         content()
     }
 }
@@ -228,7 +229,7 @@ fun SplashScreen() {
                 val radius = size.minDimension * .28f
                 drawCircle(
                     brush = Brush.radialGradient(
-                        listOf(Color(0xFFBFA25C).copy(alpha = .32f * pulse), Color.Transparent),
+                        listOf(GoalioColors.Accent.copy(alpha = .24f * pulse), Color.Transparent),
                         center = center,
                         radius = radius * 1.85f
                     ),
@@ -254,7 +255,7 @@ fun SplashScreen() {
                         center.y + kotlin.math.sin(angle).toFloat() * radius * 1.1f
                     )
                     drawLine(
-                        color = if (index % 2 == 0) Color(0xFFFF3D1F) else Color(0xFFD8C58B),
+                        color = if (index % 2 == 0) GoalioColors.Live else GoalioColors.Accent,
                         start = start,
                         end = end,
                         strokeWidth = 3f,
@@ -262,7 +263,7 @@ fun SplashScreen() {
                     )
                 }
                 drawArc(
-                    color = Color.White.copy(alpha = .65f),
+                    color = GoalioColors.AccentHover.copy(alpha = .75f),
                     startAngle = sweep,
                     sweepAngle = 80f,
                     useCenter = false,
@@ -270,7 +271,7 @@ fun SplashScreen() {
                     size = Size(radius * 2, radius * 2),
                     style = Stroke(width = 5f)
                 )
-                drawCircle(Color.White, radius = 8f * pulse, center = center)
+                drawCircle(GoalioColors.TextPrimary, radius = 8f * pulse, center = center)
             }
             Column(
                 modifier = Modifier
@@ -280,7 +281,7 @@ fun SplashScreen() {
             ) {
                 Text(
                     text = "GOALIO",
-                    color = Color.White,
+                    color = GoalioColors.TextPrimary,
                     fontSize = 27.sp,
                     fontWeight = FontWeight.SemiBold,
                     letterSpacing = 7.sp,
@@ -289,7 +290,7 @@ fun SplashScreen() {
                 Spacer(Modifier.height(5.dp))
                 Text(
                     text = "LIVE FOOTBALL SCORES",
-                    color = Color(0xFFD5D5D5),
+                    color = GoalioColors.TextSecondary,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Normal,
                     letterSpacing = 3.sp,

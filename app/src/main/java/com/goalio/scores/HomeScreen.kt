@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.goalio.scores.ui.theme.GoalioColors
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -56,11 +57,11 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 
-private val HomePanel = Color(0xFF1D1D1F)
-private val HomeCard = Color(0xFF101112)
-private val HomeMuted = Color(0xFFB9B5B6)
-private val HomeGold = Color(0xFFE2C98C)
-private val GoalRed = Color(0xFFFF351C)
+private val HomePanel = GoalioColors.Surface1
+private val HomeCard = GoalioColors.Surface2
+private val HomeMuted = GoalioColors.TextSecondary
+private val HomeAccent = GoalioColors.Accent
+private val GoalRed = GoalioColors.Live
 
 private val HomeLeagues = listOf(
     "fifa.world",
@@ -128,7 +129,7 @@ fun PersonalizedHomeScreen(
                 }
             }
             item {
-                Text("UPCOMING TODAY", color = Color(0xFFD9D3D4), fontSize = 13.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                Text("UPCOMING TODAY", color = GoalioColors.Body, fontSize = 13.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                 Spacer(Modifier.height(12.dp))
                 if (upcoming.isEmpty()) {
                     MutedPill("No upcoming fixtures found for today")
@@ -152,11 +153,11 @@ private fun HomeTopBar() {
         Text("☰", color = Color.White, fontSize = 28.sp)
         Spacer(Modifier.width(18.dp))
         Text("GOALIO", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black, letterSpacing = 5.sp, modifier = Modifier.weight(1f))
-        Text("⌕", color = HomeGold, fontSize = 30.sp)
+        Text("⌕", color = HomeAccent, fontSize = 30.sp)
         Spacer(Modifier.width(16.dp))
-        Text("◖", color = HomeGold, fontSize = 27.sp)
+        Text("◖", color = HomeAccent, fontSize = 27.sp)
         Spacer(Modifier.width(16.dp))
-        Text("⚙", color = HomeGold, fontSize = 24.sp)
+        Text("⚙", color = HomeAccent, fontSize = 24.sp)
     }
 }
 
@@ -165,14 +166,14 @@ private fun FeaturedMatchCard(match: ScheduleMatch) {
     Surface(
         color = HomePanel,
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, Color(0xFF2B2B2D)),
+        border = BorderStroke(1.dp, GoalioColors.CardBorder),
         modifier = Modifier.fillMaxWidth().height(282.dp)
     ) {
         Box {
             Canvas(Modifier.fillMaxSize()) {
                 drawCircle(
                     brush = Brush.radialGradient(
-                        listOf(Color(0xFF4D8B62).copy(alpha = .30f), Color.Transparent),
+                        listOf(GoalioColors.AccentGlow, Color.Transparent),
                         center = Offset(size.width * .5f, size.height * .65f),
                         radius = size.width * .75f
                     ),
@@ -234,7 +235,7 @@ private fun TeamBadge(team: MatchTeamInfo?, modifier: Modifier = Modifier) {
 private fun SectionHeader(title: String, action: String) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(title, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
-        Text(action, color = Color(0xFFCFC8CA), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text(action, color = GoalioColors.TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -243,7 +244,7 @@ private fun LiveActionCard(match: ScheduleMatch) {
     Surface(
         color = HomeCard,
         shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.dp, Color(0xFF272729)),
+        border = BorderStroke(1.dp, GoalioColors.Border),
         modifier = Modifier.width(210.dp).height(126.dp)
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
@@ -258,9 +259,9 @@ private fun LiveActionCard(match: ScheduleMatch) {
 private fun UpcomingRow(match: ScheduleMatch) {
     Surface(color = HomePanel, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().height(64.dp)) {
         Row(Modifier.padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(formatKickoff(match.kickoff), color = Color(0xFFD9D4D5), fontSize = 18.sp)
+            Text(formatKickoff(match.kickoff), color = GoalioColors.Body, fontSize = 18.sp)
             Spacer(Modifier.width(18.dp))
-            Text(match.shortName ?: match.name ?: "Match", color = Color(0xFFE8E3E4), fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(match.shortName ?: match.name ?: "Match", color = GoalioColors.TextPrimary, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Text("›", color = Color.White, fontSize = 32.sp)
         }
     }
@@ -268,7 +269,7 @@ private fun UpcomingRow(match: ScheduleMatch) {
 
 @Composable
 private fun WinProbabilityCard(match: ScheduleMatch?) {
-    Surface(color = HomePanel, shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, Color(0xFF515153)), modifier = Modifier.fillMaxWidth()) {
+    Surface(color = HomePanel, shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, GoalioColors.Border), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp)) {
             Text("⌁ Win Probability", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Black)
             Spacer(Modifier.height(18.dp))
@@ -279,15 +280,15 @@ private fun WinProbabilityCard(match: ScheduleMatch?) {
             Spacer(Modifier.height(10.dp))
             Row(Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(50))) {
                 Box(Modifier.weight(.55f).fillMaxSize().background(Color.White))
-                Box(Modifier.weight(.45f).fillMaxSize().background(GoalRed))
+                Box(Modifier.weight(.45f).fillMaxSize().background(GoalioColors.Negative))
             }
             Spacer(Modifier.height(18.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("55%", color = HomeMuted, fontSize = 18.sp)
                 Spacer(Modifier.width(20.dp))
-                Text("45%", color = GoalRed, fontSize = 18.sp)
+                Text("45%", color = GoalioColors.Negative, fontSize = 18.sp)
                 Spacer(Modifier.weight(1f))
-                Surface(color = Color(0xFF3F4141), shape = RoundedCornerShape(50)) {
+                Surface(color = GoalioColors.Surface3, shape = RoundedCornerShape(50)) {
                     Text("View Analysis", color = Color.White.copy(alpha = .78f), fontSize = 16.sp, modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp))
                 }
             }
@@ -297,9 +298,9 @@ private fun WinProbabilityCard(match: ScheduleMatch?) {
 
 @Composable
 private fun MiniHubCard(finished: List<ScheduleMatch>, fallbackTeams: Set<String>) {
-    Surface(color = Color(0xFF101110), shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, Color(0xFF303030)), modifier = Modifier.fillMaxWidth()) {
+    Surface(color = GoalioColors.Surface1, shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, GoalioColors.CardBorder), modifier = Modifier.fillMaxWidth()) {
         Column {
-            Row(Modifier.fillMaxWidth().background(Color(0xFF5C5B5A)).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().background(GoalioColors.Surface3).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("🌎 World Cup Hub", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
                 Text("View Hub", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Black)
             }
@@ -307,7 +308,7 @@ private fun MiniHubCard(finished: List<ScheduleMatch>, fallbackTeams: Set<String
             rows.forEachIndexed { index, team ->
                 Row(Modifier.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("${index + 1}", color = Color.White, fontSize = 17.sp, modifier = Modifier.width(42.dp))
-                    Text(team, color = Color(0xFFEAE3D3), fontSize = 17.sp, modifier = Modifier.weight(1f))
+                    Text(team, color = GoalioColors.Body, fontSize = 17.sp, modifier = Modifier.weight(1f))
                     Text("${12 - index * 2}", color = Color.White, fontSize = 17.sp)
                 }
             }
@@ -325,16 +326,16 @@ private fun FunZone(fallbackPlayers: Set<String>) {
             FunTile("☷", "Guess Player", Modifier.weight(1f))
         }
         Spacer(Modifier.height(18.dp))
-        Surface(color = Color(0xFFE6E2D4), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().height(150.dp)) {
+        Surface(color = GoalioColors.Surface2, shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, GoalioColors.CardBorder), modifier = Modifier.fillMaxWidth().height(150.dp)) {
             Box {
                 Canvas(Modifier.fillMaxSize()) {
-                    drawCircle(Color(0xFFE6BB58).copy(alpha = .55f), radius = size.width * .22f, center = Offset(size.width * .72f, size.height * .25f))
-                    drawCircle(Color(0xFF496D3B).copy(alpha = .35f), radius = size.width * .55f, center = Offset(size.width * .52f, size.height * 1.12f), style = Stroke(width = 24f))
+                    drawCircle(GoalioColors.AccentGlow, radius = size.width * .22f, center = Offset(size.width * .72f, size.height * .25f))
+                    drawCircle(GoalioColors.Positive.copy(alpha = .22f), radius = size.width * .55f, center = Offset(size.width * .52f, size.height * 1.12f), style = Stroke(width = 24f))
                 }
                 Column(Modifier.padding(24.dp)) {
-                    Text("Roll & Win", color = Color(0xFF1D1D1F), fontSize = 18.sp)
-                    Text("Earn points for every goal predicted", color = Color(0xFF1D1D1F), fontSize = 18.sp, lineHeight = 26.sp)
-                    if (fallbackPlayers.isNotEmpty()) Text("Try with ${fallbackPlayers.first()}", color = Color(0xFF4B4B4B), fontSize = 13.sp)
+                    Text("Roll & Win", color = GoalioColors.TextPrimary, fontSize = 18.sp)
+                    Text("Earn points for every goal predicted", color = GoalioColors.Body, fontSize = 18.sp, lineHeight = 26.sp)
+                    if (fallbackPlayers.isNotEmpty()) Text("Try with ${fallbackPlayers.first()}", color = GoalioColors.Caption, fontSize = 13.sp)
                 }
             }
         }
@@ -343,11 +344,11 @@ private fun FunZone(fallbackPlayers: Set<String>) {
 
 @Composable
 private fun FunTile(icon: String, label: String, modifier: Modifier = Modifier) {
-    Surface(color = Color.Black, shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, Color(0xFF151515)), modifier = modifier.height(104.dp)) {
+    Surface(color = GoalioColors.Background, shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, GoalioColors.CardBorder), modifier = modifier.height(104.dp)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Text(icon, color = HomeGold, fontSize = 27.sp)
+            Text(icon, color = HomeAccent, fontSize = 27.sp)
             Spacer(Modifier.height(9.dp))
-            Text(label, color = Color(0xFFD9D4D5), fontSize = 16.sp)
+            Text(label, color = GoalioColors.Body, fontSize = 16.sp)
         }
     }
 }
@@ -361,7 +362,7 @@ private fun MutedPill(text: String) {
 
 @Composable
 private fun HomeBottomNav(modifier: Modifier = Modifier) {
-    Surface(color = Color.Black, shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp), border = BorderStroke(1.dp, Color(0xFF101010)), modifier = modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
+    Surface(color = GoalioColors.Navigation, shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp), border = BorderStroke(1.dp, GoalioColors.CardBorder), modifier = modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
         Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
             BottomTab("⌂", "Home", true)
             BottomTab("⚽", "Matches", false)
@@ -373,8 +374,8 @@ private fun HomeBottomNav(modifier: Modifier = Modifier) {
 
 @Composable
 private fun RowScope.BottomTab(icon: String, label: String, selected: Boolean) {
-    val bg = if (selected) Color.White else Color.Transparent
-    val fg = if (selected) Color.Black else Color(0xFFC9C4C5)
+    val bg = if (selected) GoalioColors.Accent else Color.Transparent
+    val fg = if (selected) GoalioColors.TextPrimary else GoalioColors.TextTertiary
     Surface(color = bg, shape = RoundedCornerShape(50), modifier = Modifier.weight(1f).height(54.dp)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text(icon, color = fg, fontSize = 19.sp)

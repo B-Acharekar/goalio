@@ -58,12 +58,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.goalio.scores.ui.theme.GoalioColors
 import kotlinx.coroutines.launch
 
-private val Gold = Color(0xFFD4A92B)
-private val Ink = Color(0xFF080A09)
-private val Card = Color(0xFF171A19)
-private val Muted = Color(0xFFB7B9B8)
+private val Gold = GoalioColors.Accent
+private val Ink = GoalioColors.Background
+private val Card = GoalioColors.Surface1
+private val Muted = GoalioColors.TextSecondary
 
 private data class OnboardingPage(
     val title: String,
