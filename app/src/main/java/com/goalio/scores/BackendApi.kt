@@ -23,6 +23,8 @@ data class BackendProfile(
 
 data class BackendHome(val greeting: String, val profile: BackendProfile)
 
+data class BackendPage<T>(val items: List<T>, val nextCursor: String?)
+
 object GoalioBackendApi {
     private val baseUrl: String
         get() = FirebaseRemoteConfig.getInstance().getString("backend_base_url")
@@ -51,6 +53,24 @@ object GoalioBackendApi {
     suspend fun isUsernameAvailable(username: String): Boolean = request(
         "GET", "/api/v1/users/username/availability?username=${encode(username)}"
     ) { it.getBoolean("available") }
+
+    suspend fun getTeams(limit: Int = 100, cursor: String? = null): BackendPage<FavoriteTeam> = request(
+        "GET", pagedPath("/api/v1/football/teams", limit, cursor)
+    ) { json ->
+        BackendPage(
+            items = json.getJSONArray("items").toTeamList(),
+            nextCursor = json.nullableString("nextCursor")
+        )
+    }
+
+    suspend fun getPlayers(limit: Int = 100, cursor: String? = null): BackendPage<FavoritePlayer> = request(
+        "GET", pagedPath("/api/v1/football/players", limit, cursor)
+    ) { json ->
+        BackendPage(
+            items = json.getJSONArray("items").toPlayerList(),
+            nextCursor = json.nullableString("nextCursor")
+        )
+    }
 
     suspend fun searchTeams(query: String): List<FavoriteTeam> = request(
         "GET", "/api/v1/football/teams/search?q=${encode(query)}"
@@ -113,6 +133,9 @@ object GoalioBackendApi {
         if (this@toStrings != null) for (index in 0 until length()) add(getString(index))
     }
 
+    private fun JSONObject.nullableString(key: String): String? =
+        if (isNull(key)) null else optString(key).ifBlank { null }
+
     private fun JSONArray.toTeamList() = buildList {
         for (index in 0 until length()) getJSONObject(index).run {
             val id = getString("id")
@@ -135,6 +158,16 @@ object GoalioBackendApi {
         "fra", "mbappe" -> androidx.compose.ui.graphics.Color(0xFF3159A7)
         "por", "ronaldo" -> androidx.compose.ui.graphics.Color(0xFF2B9A62)
         else -> androidx.compose.ui.graphics.Color(0xFFB0B0B0)
+    }
+
+    private fun pagedPath(path: String, limit: Int, cursor: String?): String = buildString {
+        append(path)
+        append("?limit=")
+        append(limit.coerceIn(1, 200))
+        if (!cursor.isNullOrBlank()) {
+            append("&cursor=")
+            append(encode(cursor))
+        }
     }
 
     private fun encode(value: String) = URLEncoder.encode(value, Charsets.UTF_8.name())
