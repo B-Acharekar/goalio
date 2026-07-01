@@ -296,18 +296,64 @@ private fun ConnectedBracket(bracket: WorldCupBracketInfo) {
         val quarters = matches("QF")
         val semis = matches("SF")
         val final = matches("FINAL").filter { it.slotIndex == 0 }.take(1)
+        val allMatches = listOf(r32, r16, quarters, semis, final).flatten()
+        val fallbackCenters = buildMap<Pair<String, Int>, Float> {
+            r32.forEach { put("R32" to it.slotIndex, outer[it.slotIndex % 8]) }
+            r16.forEach { put("R16" to it.slotIndex, round16Centers[it.slotIndex % 4]) }
+            quarters.forEach { put("QF" to it.slotIndex, quarterCenters[it.slotIndex % 2]) }
+            semis.forEach { put("SF" to it.slotIndex, semiCenters.first()) }
+            final.forEach { put("FINAL" to it.slotIndex, finalCenters.first()) }
+        }
+        val centersBySlot = mutableMapOf<Pair<String, Int>, Float>()
+        r32.forEach { match -> centersBySlot["R32" to match.slotIndex] = fallbackCenters.getValue("R32" to match.slotIndex) }
+        listOf("R16", "QF", "SF", "FINAL").forEach { targetRound ->
+            matches(targetRound).forEach { target ->
+                val sourceCenters = allMatches.mapNotNull { source ->
+                    source.nextMatchSlot
+                        ?.takeIf { it.round == targetRound && it.slotIndex == target.slotIndex }
+                        ?.let { centersBySlot[source.round to source.slotIndex] }
+                }
+                centersBySlot[targetRound to target.slotIndex] =
+                    sourceCenters.takeIf { it.isNotEmpty() }?.average()?.toFloat()
+                        ?: fallbackCenters.getValue(targetRound to target.slotIndex)
+            }
+        }
+
+        fun column(code: String, title: String, items: List<WorldCupBracketMatchInfo>) = BracketColumn(
+            roundCode = code,
+            title = title,
+            matches = items,
+            centers = items.map { centersBySlot[code to it.slotIndex] ?: fallbackCenters.getValue(code to it.slotIndex) }
+        )
 
         listOf(
-            BracketColumn("ROUND OF 32", slots(r32, 0..7), outer),
-            BracketColumn("ROUND OF 16", slots(r16, 0..3), round16Centers),
-            BracketColumn("QUARTERFINALS", slots(quarters, 0..1), quarterCenters),
-            BracketColumn("SEMIFINALS", slots(semis, 0..0), semiCenters),
-            BracketColumn("FINAL", final, finalCenters),
-            BracketColumn("SEMIFINALS", slots(semis, 1..1), semiCenters),
-            BracketColumn("QUARTERFINALS", slots(quarters, 2..3), quarterCenters),
-            BracketColumn("ROUND OF 16", slots(r16, 4..7), round16Centers),
-            BracketColumn("ROUND OF 32", slots(r32, 8..15), outer)
+            column("R32", "ROUND OF 32", slots(r32, 0..7)),
+            column("R16", "ROUND OF 16", slots(r16, 0..3)),
+            column("QF", "QUARTERFINALS", slots(quarters, 0..1)),
+            column("SF", "SEMIFINALS", slots(semis, 0..0)),
+            column("FINAL", "FINAL", final),
+            column("SF", "SEMIFINALS", slots(semis, 1..1)),
+            column("QF", "QUARTERFINALS", slots(quarters, 2..3)),
+            column("R16", "ROUND OF 16", slots(r16, 4..7)),
+            column("R32", "ROUND OF 32", slots(r32, 8..15))
         )
+    }
+    val nodePositions = remember(columns) {
+        buildMap<Pair<String, Int>, BracketNodePosition> {
+            columns.forEachIndexed { columnIndex, column ->
+                column.matches.zip(column.centers).forEach { (match, center) ->
+                    put(column.roundCode to match.slotIndex, BracketNodePosition(columnIndex, center))
+                }
+            }
+        }
+    }
+    val connectionGroups = remember(columns, nodePositions) {
+        columns.flatMap { it.matches }.mapNotNull { source ->
+            val targetSlot = source.nextMatchSlot ?: return@mapNotNull null
+            val sourcePosition = nodePositions[source.round to source.slotIndex] ?: return@mapNotNull null
+            val targetPosition = nodePositions[targetSlot.round to targetSlot.slotIndex] ?: return@mapNotNull null
+            BracketConnectionSource(targetSlot.round to targetSlot.slotIndex, sourcePosition, targetPosition)
+        }.groupBy { it.targetKey }.values
     }
     val contentWidth = columns.size * cardWidth + (columns.size - 1) * columnGap + 28f * metrics.scale
     val contentHeight = headerHeight + 8 * firstStep + 10f * metrics.scale
@@ -326,48 +372,25 @@ private fun ConnectedBracket(bracket: WorldCupBracketInfo) {
                 val widthPx = cardWidth.dp.toPx()
                 val gapPx = columnGap.dp.toPx()
 
-                fun connectRight(childColumn: Int, parentColumn: Int) {
-                    val childCenters = columns[childColumn].centers
-                    val parentCenters = columns[parentColumn].centers
-                    val startX = childColumn * (widthPx + gapPx) + widthPx
-                    val endX = parentColumn * (widthPx + gapPx)
+                fun drawSources(sources: List<BracketNodePosition>, target: BracketNodePosition, towardRight: Boolean) {
+                    if (sources.isEmpty()) return
+                    val sourceColumn = sources.first().columnIndex
+                    val startX = sourceColumn * (widthPx + gapPx) + if (towardRight) widthPx else 0f
+                    val endX = target.columnIndex * (widthPx + gapPx) + if (towardRight) 0f else widthPx
                     val middleX = (startX + endX) / 2f
-                    parentCenters.forEachIndexed { parentIndex, parentCenter ->
-                        val children = listOfNotNull(childCenters.getOrNull(parentIndex * 2), childCenters.getOrNull(parentIndex * 2 + 1))
-                        if (children.isEmpty()) return@forEachIndexed
-                        children.forEach { child ->
-                            drawLine(connector, Offset(startX, child.dp.toPx()), Offset(middleX, child.dp.toPx()), 2.dp.toPx(), StrokeCap.Round)
-                        }
-                        drawLine(connector, Offset(middleX, children.min().dp.toPx()), Offset(middleX, children.max().dp.toPx()), 2.dp.toPx(), StrokeCap.Round)
-                        drawLine(connector, Offset(middleX, parentCenter.dp.toPx()), Offset(endX, parentCenter.dp.toPx()), 2.dp.toPx(), StrokeCap.Round)
+                    sources.forEach { source ->
+                        drawLine(connector, Offset(startX, source.centerY.dp.toPx()), Offset(middleX, source.centerY.dp.toPx()), 2.dp.toPx(), StrokeCap.Round)
                     }
+                    val allCenters = sources.map { it.centerY } + target.centerY
+                    drawLine(connector, Offset(middleX, allCenters.min().dp.toPx()), Offset(middleX, allCenters.max().dp.toPx()), 2.dp.toPx(), StrokeCap.Round)
+                    drawLine(connector, Offset(middleX, target.centerY.dp.toPx()), Offset(endX, target.centerY.dp.toPx()), 2.dp.toPx(), StrokeCap.Round)
                 }
 
-                fun connectLeft(childColumn: Int, parentColumn: Int) {
-                    val childCenters = columns[childColumn].centers
-                    val parentCenters = columns[parentColumn].centers
-                    val startX = childColumn * (widthPx + gapPx)
-                    val endX = parentColumn * (widthPx + gapPx) + widthPx
-                    val middleX = (startX + endX) / 2f
-                    parentCenters.forEachIndexed { parentIndex, parentCenter ->
-                        val children = listOfNotNull(childCenters.getOrNull(parentIndex * 2), childCenters.getOrNull(parentIndex * 2 + 1))
-                        if (children.isEmpty()) return@forEachIndexed
-                        children.forEach { child ->
-                            drawLine(connector, Offset(startX, child.dp.toPx()), Offset(middleX, child.dp.toPx()), 2.dp.toPx(), StrokeCap.Round)
-                        }
-                        drawLine(connector, Offset(middleX, children.min().dp.toPx()), Offset(middleX, children.max().dp.toPx()), 2.dp.toPx(), StrokeCap.Round)
-                        drawLine(connector, Offset(middleX, parentCenter.dp.toPx()), Offset(endX, parentCenter.dp.toPx()), 2.dp.toPx(), StrokeCap.Round)
-                    }
+                connectionGroups.forEach { group ->
+                    val target = group.first().targetPosition
+                    drawSources(group.map { it.sourcePosition }.filter { it.columnIndex < target.columnIndex }, target, towardRight = true)
+                    drawSources(group.map { it.sourcePosition }.filter { it.columnIndex > target.columnIndex }, target, towardRight = false)
                 }
-
-                connectRight(0, 1)
-                connectRight(1, 2)
-                connectRight(2, 3)
-                connectRight(3, 4)
-                connectLeft(8, 7)
-                connectLeft(7, 6)
-                connectLeft(6, 5)
-                connectLeft(5, 4)
             }
             columns.forEachIndexed { columnIndex, column ->
                 val x = columnIndex * (cardWidth + columnGap)
@@ -389,9 +412,18 @@ private fun ConnectedBracket(bracket: WorldCupBracketInfo) {
 }
 
 private data class BracketColumn(
+    val roundCode: String,
     val title: String,
     val matches: List<WorldCupBracketMatchInfo>,
     val centers: List<Float>
+)
+
+private data class BracketNodePosition(val columnIndex: Int, val centerY: Float)
+
+private data class BracketConnectionSource(
+    val targetKey: Pair<String, Int>,
+    val sourcePosition: BracketNodePosition,
+    val targetPosition: BracketNodePosition
 )
 
 @Composable
