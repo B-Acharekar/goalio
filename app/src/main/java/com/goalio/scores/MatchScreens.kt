@@ -92,6 +92,7 @@ fun MatchScreen(
     onOpenHome: () -> Unit,
     onOpenWorldCup: () -> Unit,
     onOpenGames: () -> Unit,
+    onOpenSettings: () -> Unit,
     onOpenMatch: (ScheduleMatch) -> Unit
 ) {
     val context = LocalContext.current
@@ -105,7 +106,7 @@ fun MatchScreen(
 
     LaunchedEffect(selectedDate) {
         MatchRepository.matchUpdates.collect { canonical ->
-            val shared = canonical.values.filter { it.kickoff?.take(10) == selectedDate }
+            val shared = canonical.values.filter { it.localKickoffDate()?.toString() == selectedDate }
             if (shared.isNotEmpty()) {
                 matches = shared.sortedWith(compareBy<ScheduleMatch> { stateRank(it.state) }.thenBy { it.kickoff.orEmpty() })
             }
@@ -113,13 +114,16 @@ fun MatchScreen(
     }
 
     LaunchedEffect(selectedDate) {
-        matches = MatchRepository.cachedFeed(context, selectedDate, selectedDate)
+        val localDate = LocalDate.parse(selectedDate)
+        val fetchFrom = localDate.minusDays(1).toString()
+        val fetchTo = localDate.plusDays(1).toString()
+        matches = MatchRepository.cachedFeed(context, fetchFrom, fetchTo).filter { it.localKickoffDate() == localDate }
         loading = matches.isEmpty()
         while (true) {
             errorMessage = null
-            runCatching { MatchRepository.refreshFeed(context, selectedDate, selectedDate) }
+            runCatching { MatchRepository.refreshFeed(context, fetchFrom, fetchTo) }
                 .onSuccess { result ->
-                    matches = result.matches
+                    matches = result.matches.filter { it.localKickoffDate() == localDate }
                     if (result.scoreChanged && GoalioAppVisibility.isForeground) {
                         Toast.makeText(context, "Goal update received", Toast.LENGTH_SHORT).show()
                     }
@@ -150,7 +154,7 @@ fun MatchScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(metrics.dp(20))
         ) {
-            item { MatchTopBar(title = "GOALIO", onBack = onBack, large = true) }
+            item { GoalioTopBar(onBack = onBack, onSettings = onOpenSettings) }
             item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(metrics.dp(13))) {
                     items((-2..8).map { today.plusDays(it.toLong()) }) { day ->
@@ -184,7 +188,7 @@ fun MatchScreen(
                 }
             }
         }
-        MatchBottomNav(Modifier.align(Alignment.BottomCenter), selected = "Matches", onHome = onOpenHome, onMatches = {}, onWorldCup = onOpenWorldCup, onGames = onOpenGames)
+        GoalioBottomBar(Modifier.align(Alignment.BottomCenter), "Matches", onOpenHome, {}, onOpenWorldCup, onOpenGames)
     }
 }
 
@@ -197,7 +201,8 @@ fun MatchDetailScreen(
     onOpenHome: () -> Unit,
     onOpenMatches: () -> Unit,
     onOpenWorldCup: () -> Unit,
-    onOpenGames: () -> Unit
+    onOpenGames: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
     val context = LocalContext.current
     val metrics = rememberGoalioMetrics()
@@ -277,7 +282,7 @@ fun MatchDetailScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(metrics.dp(16))
         ) {
-            item { MatchTopBar(title = "Goalio", onBack = onBack, large = false) }
+            item { GoalioTopBar(onBack = onBack, onSettings = onOpenSettings) }
             item {
                 when {
                     shown != null -> DetailHeroCard(shown)
@@ -298,7 +303,7 @@ fun MatchDetailScreen(
                 item { StreamHighlights() }
             }
         }
-        MatchBottomNav(Modifier.align(Alignment.BottomCenter), selected = "Matches", onHome = onOpenHome, onMatches = onOpenMatches, onWorldCup = onOpenWorldCup, onGames = onOpenGames)
+        GoalioBottomBar(Modifier.align(Alignment.BottomCenter), "Matches", onOpenHome, onOpenMatches, onOpenWorldCup, onOpenGames)
     }
 }
 
@@ -1227,3 +1232,7 @@ private fun formatKickoff(value: String?): String {
             .format(DateTimeFormatter.ofPattern("HH:mm"))
     }.getOrDefault(value.take(5))
 }
+
+private fun ScheduleMatch.localKickoffDate(): LocalDate? = runCatching {
+    OffsetDateTime.parse(kickoff).atZoneSameInstant(ZoneId.systemDefault()).toLocalDate()
+}.getOrNull()

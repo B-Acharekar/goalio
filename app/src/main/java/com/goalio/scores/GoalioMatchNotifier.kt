@@ -13,6 +13,9 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 object GoalioMatchNotifier {
     private const val CHANNEL_ID = "goalio_live_match_alerts"
@@ -101,9 +104,12 @@ object GoalioMatchNotifier {
     private fun showUpcomingCountdown(context: Context, match: ScheduleMatch, kickoff: Long) {
         if (!canNotify(context)) return
         ensureChannel(context)
-        val text = "${match.compactNotificationName()} • ${matchClockText(kickoff)}"
+        val text = "${match.compactNotificationName()} • Starts in"
+        val updatedAt = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
         val builder = baseBuilder(context, "Next match", text)
+            .setSubText("Updated $updatedAt")
             .setWhen(kickoff).setShowWhen(true).setUsesChronometer(true).setOngoing(false)
+            .setOnlyAlertOnce(true).setSilent(true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) builder.setChronometerCountDown(true)
         NotificationManagerCompat.from(context).notify(UPCOMING_NOTIFICATION_ID, builder.build())
     }
@@ -112,7 +118,7 @@ object GoalioMatchNotifier {
         val launch = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(context, CHANNEL_ID).setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(title).setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true).setContentIntent(launch)
+            .setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true).setOnlyAlertOnce(true).setContentIntent(launch)
     }
 
     private fun canNotify(context: Context): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||

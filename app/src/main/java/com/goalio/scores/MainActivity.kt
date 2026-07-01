@@ -195,6 +195,7 @@ class MainActivity : ComponentActivity() {
                             onOpenHome = { appScreen = "home" },
                             onOpenWorldCup = { appScreen = "worldcup" },
                             onOpenGames = { appScreen = "games" },
+                            onOpenSettings = { appScreen = "settings" },
                             onOpenMatch = { match ->
                                 selectedMatch = match
                                 appScreen = "detail"
@@ -209,7 +210,8 @@ class MainActivity : ComponentActivity() {
                                 onOpenHome = { appScreen = "home" },
                                 onOpenMatches = { appScreen = "matches" },
                                 onOpenWorldCup = { appScreen = "worldcup" },
-                                onOpenGames = { appScreen = "games" }
+                                onOpenGames = { appScreen = "games" },
+                                onOpenSettings = { appScreen = "settings" }
                             )
                         } ?: run {
                             appScreen = "matches"
@@ -218,6 +220,7 @@ class MainActivity : ComponentActivity() {
                                 onOpenHome = { appScreen = "home" },
                                 onOpenWorldCup = { appScreen = "worldcup" },
                                 onOpenGames = { appScreen = "games" },
+                                onOpenSettings = { appScreen = "settings" },
                                 onOpenMatch = { match ->
                                     selectedMatch = match
                                     appScreen = "detail"
@@ -227,9 +230,12 @@ class MainActivity : ComponentActivity() {
                         "worldcup" -> WorldCupScreen(
                             onBack = { appScreen = "home" },
                             onOpenHome = { appScreen = "home" },
-                            onOpenMatches = { appScreen = "matches" }
+                            onOpenMatches = { appScreen = "matches" },
+                            onOpenGames = { appScreen = "games" },
+                            onOpenSettings = { appScreen = "settings" }
                         )
-                        "games" -> GameScreen(onBack = { appScreen = "home" }, onOpenHome = { appScreen = "home" })
+                        "games" -> GameScreen(onBack = { appScreen = "home" }, onOpenHome = { appScreen = "home" }, onOpenMatches = { appScreen = "matches" }, onOpenWorldCup = { appScreen = "worldcup" }, onOpenSettings = { appScreen = "settings" })
+                        "settings" -> SettingsScreen(onBack = { appScreen = "home" }, onHome = { appScreen = "home" }, onMatches = { appScreen = "matches" }, onWorldCup = { appScreen = "worldcup" }, onGames = { appScreen = "games" })
                         else -> PersonalizedHomeScreen(
                             fallbackName = settings.getString("profile_full_name", null),
                             fallbackTeams = settings.getStringSet("profile_team_names", emptySet()).orEmpty(),
@@ -237,6 +243,7 @@ class MainActivity : ComponentActivity() {
                             onOpenMatches = { appScreen = "matches" },
                             onOpenWorldCup = { appScreen = "worldcup" },
                             onOpenGames = { appScreen = "games" },
+                            onOpenSettings = { appScreen = "settings" },
                             onOpenMatch = { match ->
                                 selectedMatch = match
                                 appScreen = "detail"

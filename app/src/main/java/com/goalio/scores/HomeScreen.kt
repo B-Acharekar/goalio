@@ -77,6 +77,7 @@ fun PersonalizedHomeScreen(
     onOpenMatches: () -> Unit,
     onOpenWorldCup: () -> Unit,
     onOpenGames: () -> Unit,
+    onOpenSettings: () -> Unit,
     onOpenMatch: (ScheduleMatch) -> Unit
 ) {
     val context = LocalContext.current
@@ -92,7 +93,7 @@ fun PersonalizedHomeScreen(
     LaunchedEffect(fromDate, toDate) {
         MatchRepository.matchUpdates.collect { canonical ->
             val shared = canonical.values.filter { match ->
-                match.kickoff?.take(10)?.let { it >= fromDate && it <= toDate } ?: true
+                match.localKickoffDate()?.toString()?.let { it >= fromDate && it <= toDate } ?: true
             }
             if (shared.isNotEmpty()) {
                 matches = shared.sortedWith(compareBy<ScheduleMatch> { stateRank(it.state) }.thenBy { it.kickoff.orEmpty() })
@@ -145,7 +146,7 @@ fun PersonalizedHomeScreen(
             contentPadding = PaddingValues(start = metrics.horizontalPadding, end = metrics.horizontalPadding, top = metrics.dp(20), bottom = metrics.bottomBarPadding),
             verticalArrangement = Arrangement.spacedBy(metrics.dp(20))
         ) {
-            item { HomeTopBar(fallbackName) }
+            item { GoalioTopBar(onSettings = onOpenSettings) }
             item {
                 when {
                     loading -> HomeStateCard("Loading real match data...")
@@ -184,7 +185,7 @@ fun PersonalizedHomeScreen(
                 item { FunZoneSection() }
             }
         }
-            HomeBottomNav(Modifier.align(Alignment.BottomCenter), onOpenMatches, onOpenWorldCup, onOpenGames)
+            GoalioBottomBar(Modifier.align(Alignment.BottomCenter), "Home", {}, onOpenMatches, onOpenWorldCup, onOpenGames)
     }
 }
 
@@ -621,6 +622,10 @@ private fun ScheduleMatch.isTodayKickoff(today: LocalDate): Boolean {
     }.getOrNull()
     return localDate == today
 }
+
+private fun ScheduleMatch.localKickoffDate(): LocalDate? = runCatching {
+    OffsetDateTime.parse(kickoff).atZoneSameInstant(ZoneId.systemDefault()).toLocalDate()
+}.getOrNull()
 
 private fun ScheduleMatch?.winProbability(): Float {
     if (this == null) return 50f

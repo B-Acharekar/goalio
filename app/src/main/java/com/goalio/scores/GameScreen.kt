@@ -11,6 +11,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,7 +25,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-fun GameScreen(onBack: () -> Unit, onOpenHome: () -> Unit) {
+fun GameScreen(onBack: () -> Unit, onOpenHome: () -> Unit, onOpenMatches: () -> Unit, onOpenWorldCup: () -> Unit, onOpenSettings: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val metrics = rememberGoalioMetrics()
     val scope = rememberCoroutineScope()
@@ -62,13 +63,15 @@ fun GameScreen(onBack: () -> Unit, onOpenHome: () -> Unit) {
 
     GoalioBackground {
         LazyColumn(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(), contentPadding = PaddingValues(metrics.horizontalPadding, 18.dp, metrics.horizontalPadding, 40.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            item { Row(verticalAlignment = Alignment.CenterVertically) { Text("‹", color = GoalioColors.Accent, fontSize = metrics.sp(34), modifier = Modifier.clickable(onClick = onBack)); Spacer(Modifier.width(12.dp)); Text("GOALIO QUIZ", color = GoalioColors.TextPrimary, fontSize = metrics.sp(24), fontWeight = FontWeight.Black); Spacer(Modifier.weight(1f)); Text("${leaderboard?.me?.xp ?: 0} XP", color = GoalioColors.Accent, fontWeight = FontWeight.Black) } }
+            item { GoalioTopBar("GAMES", onBack = onBack, onSettings = onOpenSettings) }
+            item { Row { Text("FOOTBALL FIVE", color = GoalioColors.TextPrimary, fontSize = metrics.sp(20), fontWeight = FontWeight.Black); Spacer(Modifier.weight(1f)); Text("${leaderboard?.me?.xp ?: 0} XP", color = GoalioColors.Accent, fontWeight = FontWeight.Black) } }
             if (session == null) {
                 item { QuizWelcome(loading, error) { loading = true } }
                 item { Button(onClick = { scope.launch { start() } }, enabled = !loading, colors = ButtonDefaults.buttonColors(containerColor = GoalioColors.Accent), modifier = Modifier.fillMaxWidth().height(54.dp)) { Text(if (loading) "LOADING…" else "PLAY 5 QUESTIONS", color = Color.Black, fontWeight = FontWeight.Black) } }
             } else {
                 val question = session!!.questions[index]
                 item { Row { Text("QUESTION ${index + 1}/5", color = GoalioColors.TextSecondary, fontWeight = FontWeight.Bold); Spacer(Modifier.weight(1f)); Text("00:%02d".format(remaining), color = if (remaining <= 5) GoalioColors.Live else GoalioColors.Accent, fontWeight = FontWeight.Black) } }
+                item { LinearProgressIndicator(progress = { (index + 1) / 5f }, modifier = Modifier.fillMaxWidth().height(6.dp), color = GoalioColors.Accent, trackColor = GoalioColors.Surface2) }
                 item { Surface(color = GoalioColors.Surface1, shape = RoundedCornerShape(22.dp), border = BorderStroke(1.dp, GoalioColors.CardBorder)) { Column(Modifier.padding(22.dp)) { Text(question.category.uppercase(), color = GoalioColors.Accent, fontSize = metrics.sp(12), fontWeight = FontWeight.Black); Spacer(Modifier.height(12.dp)); Text(question.prompt, color = GoalioColors.TextPrimary, fontSize = metrics.sp(22), fontWeight = FontWeight.Black) } } }
                 items(question.options.indices.toList()) { optionIndex ->
                     val result = answer
@@ -80,9 +83,12 @@ fun GameScreen(onBack: () -> Unit, onOpenHome: () -> Unit) {
                 answer?.let { result -> item { Surface(color = if (result.correct) Color(0xFF173E2D) else Color(0xFF4A2020), shape = RoundedCornerShape(16.dp)) { Column(Modifier.padding(18.dp)) { Text(if (result.correct) "+${result.xpDelta} XP • CORRECT" else "${result.xpDelta} XP • ${if (result.timedOut) "TIME UP" else "WRONG"}", color = if (result.correct) Color(0xFF52E49A) else Color(0xFFFF7C72), fontWeight = FontWeight.Black); Spacer(Modifier.height(7.dp)); Text(result.explanation, color = GoalioColors.TextSecondary) } } } }
                 answer?.let { result -> item { Button(onClick = { if (result.completed) { session = null } else { index++; answer = null; remaining = 15 } }, colors = ButtonDefaults.buttonColors(containerColor = GoalioColors.Accent), modifier = Modifier.fillMaxWidth()) { Text(if (result.completed) "FINISH" else "NEXT QUESTION", color = Color.Black, fontWeight = FontWeight.Black) } } }
             }
-            item { Text("LEADERBOARD", color = GoalioColors.TextPrimary, fontSize = metrics.sp(18), fontWeight = FontWeight.Black) }
-            items(leaderboard?.entries.orEmpty().take(10)) { player -> Surface(color = if (player.isMe) Color(0xFF302A1E) else GoalioColors.Surface1, shape = RoundedCornerShape(14.dp)) { Row(Modifier.fillMaxWidth().padding(15.dp)) { Text("#${player.rank}", color = GoalioColors.Accent, fontWeight = FontWeight.Black, modifier = Modifier.width(48.dp)); Text("@${player.username}", color = GoalioColors.TextPrimary, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)); Text("${player.xp} XP", color = GoalioColors.TextSecondary, fontWeight = FontWeight.Black) } } }
+            if (session == null) {
+                item { Text("LEADERBOARD", color = GoalioColors.TextPrimary, fontSize = metrics.sp(18), fontWeight = FontWeight.Black) }
+                items(leaderboard?.entries.orEmpty().take(10)) { player -> Surface(color = if (player.isMe) Color(0xFF302A1E) else GoalioColors.Surface1, shape = RoundedCornerShape(14.dp)) { Row(Modifier.fillMaxWidth().padding(15.dp)) { Text("#${player.rank}", color = GoalioColors.Accent, fontWeight = FontWeight.Black, modifier = Modifier.width(48.dp)); Text("@${player.username}", color = GoalioColors.TextPrimary, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)); Text("${player.xp} XP", color = GoalioColors.TextSecondary, fontWeight = FontWeight.Black) } } }
+            }
         }
+        GoalioBottomBar(Modifier.align(Alignment.BottomCenter), "Games", onOpenHome, onOpenMatches, onOpenWorldCup, {})
     }
 }
 

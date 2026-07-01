@@ -57,7 +57,9 @@ import kotlinx.coroutines.delay
 fun WorldCupScreen(
     onBack: () -> Unit,
     onOpenHome: () -> Unit,
-    onOpenMatches: () -> Unit
+    onOpenMatches: () -> Unit,
+    onOpenGames: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
     val context = LocalContext.current
     val metrics = rememberGoalioMetrics()
@@ -91,7 +93,7 @@ fun WorldCupScreen(
             contentPadding = PaddingValues(metrics.horizontalPadding, metrics.dp(18), metrics.horizontalPadding, metrics.bottomBarPadding),
             verticalArrangement = Arrangement.spacedBy(metrics.dp(22))
         ) {
-            item { WorldCupTopBar(onBack) }
+            item { GoalioTopBar(onBack = onBack, onSettings = onOpenSettings) }
             when {
                 data == null && error == null -> item { WorldCupState("Loading World Cup data...") }
                 error != null -> item { WorldCupState(error.orEmpty()) }
@@ -111,7 +113,7 @@ fun WorldCupScreen(
                 }
             }
         }
-        WorldCupBottomNav(Modifier.align(Alignment.BottomCenter), onOpenHome, onOpenMatches)
+        GoalioBottomBar(Modifier.align(Alignment.BottomCenter), "World Cup", onOpenHome, onOpenMatches, {}, onOpenGames)
     }
 }
 
