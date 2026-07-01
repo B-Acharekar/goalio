@@ -400,7 +400,7 @@ private fun DetailHeroCard(detail: MatchDetail) {
             Text(detail.venueText().ifBlank { detail.leagueLabel() }, color = GoalioColors.TextSecondary, fontSize = metrics.sp(13), fontWeight = FontWeight.Black, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(metrics.dp(28)))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("MOMENTUM", color = GoalioColors.TextSecondary, fontSize = metrics.sp(11), fontWeight = FontWeight.Black)
+                Text("WIN PROBABILITY", color = GoalioColors.TextSecondary, fontSize = metrics.sp(11), fontWeight = FontWeight.Black)
                 Spacer(Modifier.weight(1f))
                 Text("${detail.homeWinProbability().toInt()}% ${detail.homeTeam?.abbreviation ?: "HOME"}", color = GoalioColors.TextSecondary, fontSize = metrics.sp(11), fontWeight = FontWeight.Black)
             }
@@ -430,7 +430,8 @@ private fun ScheduleHeroCard(match: ScheduleMatch) {
         playerLeaders = emptyList(),
         lineups = emptyList(),
         events = emptyList(),
-        summary = null
+        summary = null,
+        winProbability = null
     )
     DetailHeroCard(detail)
 }
@@ -912,6 +913,7 @@ private fun ScheduleMatch.homeWinProbability(): Float {
 }
 
 private fun MatchDetail.homeWinProbability(): Float {
+    winProbability?.homeWinPercentage?.let { return it.toFloat().coerceIn(1f, 99f) }
     val home = homeTeam?.score ?: return statPercent("possession") ?: 50f
     val away = awayTeam?.score ?: return statPercent("possession") ?: 50f
     return (50f + (home - away) * 12f).coerceIn(30f, 78f)

@@ -194,6 +194,7 @@ private fun MatchDetail.toJson() = JSONObject().apply {
     put("lineups", JSONArray(lineups.map { it.toJson() }))
     put("events", JSONArray(events.map { it.toJson() }))
     putNullable("summary", summary)
+    putNullable("winProbability", winProbability?.toJson())
 }
 
 private fun TeamStatsBlock.toJson() = JSONObject().apply {
@@ -260,6 +261,12 @@ private fun MatchTimelineEvent.toJson() = JSONObject().apply {
     putNullable("team", team)
 }
 
+private fun WinProbabilityInfo.toJson() = JSONObject().apply {
+    put("homeWinPercentage", homeWinPercentage)
+    put("awayWinPercentage", awayWinPercentage)
+    putNullable("drawPercentage", drawPercentage)
+}
+
 private fun JSONObject.putNullable(key: String, value: Any?) {
     if (value == null) put(key, JSONObject.NULL) else put(key, value)
 }
@@ -298,7 +305,14 @@ private fun JSONObject.toMatchDetail() = MatchDetail(
     playerLeaders = optJSONArray("playerLeaders").toLeaderGroups(),
     lineups = optJSONArray("lineups").toTeamLineups(),
     events = optJSONArray("events").toTimelineEvents(),
-    summary = nullableString("summary")
+    summary = nullableString("summary"),
+    winProbability = optJSONObject("winProbability")?.toWinProbabilityInfo()
+)
+
+private fun JSONObject.toWinProbabilityInfo() = WinProbabilityInfo(
+    homeWinPercentage = optInt("homeWinPercentage", 50),
+    awayWinPercentage = optInt("awayWinPercentage", 50),
+    drawPercentage = if (isNull("drawPercentage")) null else optInt("drawPercentage")
 )
 
 private fun JSONObject.toMatchTeamInfo() = MatchTeamInfo(

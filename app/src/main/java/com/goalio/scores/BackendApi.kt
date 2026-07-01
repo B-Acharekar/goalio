@@ -171,6 +171,12 @@ data class MatchTimelineEvent(
     val team: String?
 )
 
+data class WinProbabilityInfo(
+    val homeWinPercentage: Int,
+    val awayWinPercentage: Int,
+    val drawPercentage: Int?
+)
+
 data class MatchDetail(
     val matchId: String,
     val league: String,
@@ -186,7 +192,8 @@ data class MatchDetail(
     val playerLeaders: List<MatchLeaderGroup>,
     val lineups: List<TeamLineupInfo>,
     val events: List<MatchTimelineEvent>,
-    val summary: String?
+    val summary: String?,
+    val winProbability: WinProbabilityInfo?
 )
 
 object GoalioBackendApi {
@@ -523,7 +530,14 @@ object GoalioBackendApi {
         playerLeaders = optJSONArray("playerLeaders").toLeaderGroups(),
         lineups = optJSONArray("lineups").toTeamLineups(),
         events = optJSONArray("events").toTimelineEvents(),
-        summary = nullableString("summary")
+        summary = nullableString("summary"),
+        winProbability = optJSONObject("winProbability")?.toWinProbabilityInfo()
+    )
+
+    private fun JSONObject.toWinProbabilityInfo() = WinProbabilityInfo(
+        homeWinPercentage = optInt("homeWinPercentage", 50),
+        awayWinPercentage = optInt("awayWinPercentage", 50),
+        drawPercentage = if (isNull("drawPercentage")) null else optInt("drawPercentage")
     )
 
     private fun JSONArray?.toMatchOfficials(): List<MatchOfficialInfo> = buildList {
