@@ -121,7 +121,7 @@ fun MatchScreen(
                     }
                 }
             loading = false
-            delay(MatchRepository.nextRefreshDelayMillis(context, matches))
+            delay(MatchRepository.nextRefreshDelayMillis(matches))
         }
     }
 
@@ -192,7 +192,6 @@ fun MatchDetailScreen(
     var loading by remember { mutableStateOf(detail == null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var selectedTab by rememberSaveable { mutableStateOf("Overview") }
-    var boostUntil by remember { mutableStateOf(0L) }
     var previousScore by remember { mutableStateOf(detail?.scoreSignature() ?: initialMatch?.scoreSignature().orEmpty()) }
 
     LaunchedEffect(league, matchId) {
@@ -204,7 +203,6 @@ fun MatchDetailScreen(
                 .onSuccess { fresh ->
                     val newScore = fresh.scoreSignature()
                     if (previousScore.isNotBlank() && previousScore != newScore) {
-                        boostUntil = System.currentTimeMillis() + 8 * 60 * 1000L
                         Toast.makeText(context, "Goal update received", Toast.LENGTH_SHORT).show()
                     }
                     previousScore = newScore
@@ -220,11 +218,7 @@ fun MatchDetailScreen(
             loading = false
             val isLive = detail?.statusState() == "in" || initialMatch?.state == "in"
             delay(
-                when {
-                    !isLive -> 15 * 60 * 1000L
-                    System.currentTimeMillis() < boostUntil -> 2 * 60 * 1000L
-                    else -> 5 * 60 * 1000L
-                }
+                if (isLive) 2 * 60 * 1000L else 15 * 60 * 1000L
             )
         }
     }

@@ -111,7 +111,7 @@ fun PersonalizedHomeScreen(
                     }
                 }
             loading = false
-            delay(MatchRepository.nextRefreshDelayMillis(context, matches))
+            delay(MatchRepository.nextRefreshDelayMillis(matches))
         }
     }
     LaunchedEffect(Unit) {

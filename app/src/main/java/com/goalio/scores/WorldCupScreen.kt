@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.goalio.scores.ui.theme.GoalioColors
+import kotlinx.coroutines.delay
 
 @Composable
 fun WorldCupScreen(
@@ -65,14 +66,17 @@ fun WorldCupScreen(
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
-        runCatching { WorldCupRepository.refresh(context) }
-            .onSuccess {
-                data = it
-                error = null
-            }
-            .onFailure {
-                if (data == null) error = it.message ?: "Could not load World Cup hub."
-            }
+        while (true) {
+            runCatching { WorldCupRepository.refresh(context) }
+                .onSuccess {
+                    data = it
+                    error = null
+                }
+                .onFailure {
+                    if (data == null) error = it.message ?: "Could not load World Cup hub."
+                }
+            delay(if (data?.liveMatches?.isNotEmpty() == true) 2 * 60 * 1000L else 15 * 60 * 1000L)
+        }
     }
 
     GoalioBackground {

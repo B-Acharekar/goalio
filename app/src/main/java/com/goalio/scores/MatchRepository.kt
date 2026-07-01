@@ -34,7 +34,6 @@ object MatchRepository {
     )
 
     private const val PREFS = "goalio_match_cache"
-    private const val BOOST_UNTIL = "live_boost_until"
 
     fun cachedFeed(context: Context, from: String, to: String): List<ScheduleMatch> =
         context.cachePrefs().getString(feedKey(from, to), null)
@@ -59,7 +58,6 @@ object MatchRepository {
             context.cachePrefs().edit()
                 .putString(feedKey(from, to), JSONArray(matches.map { it.toJson() }).toString())
                 .apply()
-            if (changed) markGoalBoost(context)
         }
         return MatchFeedResult(matches, changed, notificationEvents)
     }
@@ -90,21 +88,8 @@ object MatchRepository {
         return standings
     }
 
-    fun nextRefreshDelayMillis(context: Context, matches: List<ScheduleMatch>): Long {
-        val hasLive = matches.any { it.state == "in" }
-        if (!hasLive) return 15 * 60 * 1000L
-        return if (System.currentTimeMillis() < context.cachePrefs().getLong(BOOST_UNTIL, 0L)) {
-            2 * 60 * 1000L
-        } else {
-            5 * 60 * 1000L
-        }
-    }
-
-    private fun markGoalBoost(context: Context) {
-        context.cachePrefs().edit()
-            .putLong(BOOST_UNTIL, System.currentTimeMillis() + 8 * 60 * 1000L)
-            .apply()
-    }
+    fun nextRefreshDelayMillis(matches: List<ScheduleMatch>): Long =
+        if (matches.any { it.state == "in" }) 2 * 60 * 1000L else 15 * 60 * 1000L
 
     private fun Context.cachePrefs() = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
