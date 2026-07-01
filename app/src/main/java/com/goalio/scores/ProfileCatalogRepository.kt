@@ -10,7 +10,9 @@ data class ProfileCatalog(
     val teams: List<FavoriteTeam>,
     val players: List<FavoritePlayer>,
     val nextTeamCursor: String? = null,
-    val nextPlayerCursor: String? = null
+    val nextPlayerCursor: String? = null,
+    val teamError: String? = null,
+    val playerError: String? = null
 )
 
 object ProfileCatalogRepository {
@@ -25,22 +27,27 @@ object ProfileCatalogRepository {
 
             // Loading teams first also establishes the anonymous Firebase session before
             // the parallel player requests begin.
-            val teamPage = GoalioBackendApi.getTeams(limit = 6)
+            var teamError: String? = null
+            var playerError: String? = null
+            val teamPage = runCatching { GoalioBackendApi.getTeams(limit = 6) }
+                .onFailure { teamError = it.catalogMessage("Could not load teams.") }
+                .getOrElse { BackendPage(emptyList(), null) }
             val teams = teamPage.items
-            require(teams.isNotEmpty()) { "No teams are available" }
 
-            val playerPage = GoalioBackendApi.getPlayers(limit = 6)
-            val catalogPlayers = playerPage.items
-            val players = catalogPlayers
+            val playerPage = runCatching { GoalioBackendApi.getPlayers(limit = 6) }
+                .onFailure { playerError = it.catalogMessage("Could not load players.") }
+                .getOrElse { BackendPage(emptyList(), null) }
+            val players = playerPage.items
                 .distinctBy { it.id }
                 .map { it.withCompetitionIds(teams) }
-            require(players.isNotEmpty()) { "No players are available" }
 
             ProfileCatalog(
                 teams = teams,
                 players = players,
                 nextTeamCursor = teamPage.nextCursor,
-                nextPlayerCursor = playerPage.nextCursor
+                nextPlayerCursor = playerPage.nextCursor,
+                teamError = teamError ?: if (teams.isEmpty()) "No teams are available right now." else null,
+                playerError = playerError ?: if (players.isEmpty()) "No players are available right now." else null
             ).also { cachedCatalog = it }
         }
 
@@ -59,6 +66,9 @@ object ProfileCatalogRepository {
         }
     }
 }
+
+private fun Throwable.catalogMessage(prefix: String): String =
+    if (this is BackendException) "$prefix $message" else "$prefix ${message ?: "Check the backend connection and try again."}"
 
 internal fun FavoritePlayer.withCompetitionIds(teams: List<FavoriteTeam>): FavoritePlayer {
     if (competitionIds.isNotEmpty()) return this

@@ -39,6 +39,10 @@ data class MatchTeamInfo(
 
 data class MatchVenueInfo(val name: String?, val city: String?)
 
+data class MatchOfficialInfo(val name: String?, val role: String?)
+
+data class MatchWeatherInfo(val displayValue: String?, val temperature: String?, val condition: String?)
+
 data class ScheduleMatch(
     val matchId: String,
     val league: String,
@@ -56,6 +60,28 @@ data class ScheduleMatch(
 
 data class MatchSchedule(val league: String, val date: String?, val matches: List<ScheduleMatch>)
 
+data class StandingTeamInfo(
+    val rank: Int?,
+    val teamId: String,
+    val name: String,
+    val abbreviation: String?,
+    val logo: String?,
+    val group: String?,
+    val stage: String?,
+    val played: Int?,
+    val wins: Int?,
+    val draws: Int?,
+    val losses: Int?,
+    val points: Int?
+)
+
+data class LeagueStandings(
+    val league: String,
+    val season: Int?,
+    val groups: List<String>,
+    val teams: List<StandingTeamInfo>
+)
+
 data class MatchStat(val name: String?, val label: String?, val value: String?)
 
 data class TeamStatsBlock(val teamId: String?, val stats: List<MatchStat>)
@@ -71,6 +97,26 @@ data class MatchLeaderPlayer(
 )
 
 data class MatchLeaderGroup(val category: String?, val players: List<MatchLeaderPlayer>)
+
+data class LineupPlayerInfo(
+    val id: String?,
+    val name: String,
+    val position: String?,
+    val jersey: String?,
+    val starter: Boolean,
+    val captain: Boolean,
+    val substitute: Boolean,
+    val formationPlace: String?
+)
+
+data class TeamLineupInfo(
+    val teamId: String?,
+    val teamName: String?,
+    val formation: String?,
+    val coach: String?,
+    val starters: List<LineupPlayerInfo>,
+    val substitutes: List<LineupPlayerInfo>
+)
 
 data class MatchTimelineEvent(
     val minute: String?,
@@ -88,8 +134,11 @@ data class MatchDetail(
     val homeTeam: MatchTeamInfo?,
     val awayTeam: MatchTeamInfo?,
     val venue: MatchVenueInfo?,
+    val officials: List<MatchOfficialInfo>,
+    val weather: MatchWeatherInfo?,
     val teamStats: List<TeamStatsBlock>,
     val playerLeaders: List<MatchLeaderGroup>,
+    val lineups: List<TeamLineupInfo>,
     val events: List<MatchTimelineEvent>,
     val summary: String?
 )
@@ -170,6 +219,19 @@ object GoalioBackendApi {
     suspend fun getMatchDetail(league: String, eventId: String): MatchDetail = request(
         "GET", "/api/v1/matches/${encodePath(league)}/${encodePath(eventId)}/detail"
     ) { json -> json.toMatchDetail() }
+
+    suspend fun getStandings(league: String, season: Int? = null): LeagueStandings = request(
+        "GET",
+        buildString {
+            append("/api/v1/matches/")
+            append(encodePath(league))
+            append("/standings")
+            if (season != null) {
+                append("?season=")
+                append(season)
+            }
+        }
+    ) { json -> json.toLeagueStandings() }
 
     private suspend fun <T> request(
         method: String,
@@ -271,6 +333,32 @@ object GoalioBackendApi {
         matches = getJSONArray("matches").toScheduleMatches()
     )
 
+    private fun JSONObject.toLeagueStandings() = LeagueStandings(
+        league = getString("league"),
+        season = if (isNull("season")) null else optInt("season"),
+        groups = optJSONArray("groups").toStrings(),
+        teams = optJSONArray("teams").toStandingTeams()
+    )
+
+    private fun JSONArray?.toStandingTeams(): List<StandingTeamInfo> = buildList {
+        if (this@toStandingTeams != null) for (index in 0 until length()) getJSONObject(index).run {
+            add(StandingTeamInfo(
+                rank = if (isNull("rank")) null else optInt("rank"),
+                teamId = getString("teamId"),
+                name = getString("name"),
+                abbreviation = nullableString("abbreviation"),
+                logo = nullableString("logo"),
+                group = nullableString("group"),
+                stage = nullableString("stage"),
+                played = if (isNull("played")) null else optInt("played"),
+                wins = if (isNull("wins")) null else optInt("wins"),
+                draws = if (isNull("draws")) null else optInt("draws"),
+                losses = if (isNull("losses")) null else optInt("losses"),
+                points = if (isNull("points")) null else optInt("points")
+            ))
+        }
+    }
+
     private fun JSONArray.toScheduleMatches() = buildList {
         for (index in 0 until length()) getJSONObject(index).run {
             add(ScheduleMatch(
@@ -304,6 +392,12 @@ object GoalioBackendApi {
         city = nullableString("city")
     )
 
+    private fun JSONObject.toMatchWeatherInfo() = MatchWeatherInfo(
+        displayValue = nullableString("displayValue"),
+        temperature = nullableString("temperature"),
+        condition = nullableString("condition")
+    )
+
     private fun JSONObject.toMatchDetail() = MatchDetail(
         matchId = getString("matchId"),
         league = getString("league"),
@@ -313,11 +407,20 @@ object GoalioBackendApi {
         homeTeam = optJSONObject("homeTeam")?.toMatchTeamInfo(),
         awayTeam = optJSONObject("awayTeam")?.toMatchTeamInfo(),
         venue = optJSONObject("venue")?.toMatchVenueInfo(),
+        officials = optJSONArray("officials").toMatchOfficials(),
+        weather = optJSONObject("weather")?.toMatchWeatherInfo(),
         teamStats = optJSONArray("teamStats").toTeamStatsBlocks(),
         playerLeaders = optJSONArray("playerLeaders").toLeaderGroups(),
+        lineups = optJSONArray("lineups").toTeamLineups(),
         events = optJSONArray("events").toTimelineEvents(),
         summary = nullableString("summary")
     )
+
+    private fun JSONArray?.toMatchOfficials(): List<MatchOfficialInfo> = buildList {
+        if (this@toMatchOfficials != null) for (index in 0 until length()) getJSONObject(index).run {
+            add(MatchOfficialInfo(nullableString("name"), nullableString("role")))
+        }
+    }
 
     private fun JSONArray?.toTeamStatsBlocks(): List<TeamStatsBlock> = buildList {
         if (this@toTeamStatsBlocks != null) for (index in 0 until length()) getJSONObject(index).run {
@@ -347,6 +450,34 @@ object GoalioBackendApi {
                 espnUrl = nullableString("espnUrl"),
                 mainStat = nullableString("mainStat"),
                 stats = optJSONArray("stats").toMatchStats()
+            ))
+        }
+    }
+
+    private fun JSONArray?.toTeamLineups(): List<TeamLineupInfo> = buildList {
+        if (this@toTeamLineups != null) for (index in 0 until length()) getJSONObject(index).run {
+            add(TeamLineupInfo(
+                teamId = nullableString("teamId"),
+                teamName = nullableString("teamName"),
+                formation = nullableString("formation"),
+                coach = nullableString("coach"),
+                starters = optJSONArray("starters").toLineupPlayers(),
+                substitutes = optJSONArray("substitutes").toLineupPlayers()
+            ))
+        }
+    }
+
+    private fun JSONArray?.toLineupPlayers(): List<LineupPlayerInfo> = buildList {
+        if (this@toLineupPlayers != null) for (index in 0 until length()) getJSONObject(index).run {
+            add(LineupPlayerInfo(
+                id = nullableString("id"),
+                name = nullableString("name") ?: "Player",
+                position = nullableString("position"),
+                jersey = nullableString("jersey"),
+                starter = optBoolean("starter", false),
+                captain = optBoolean("captain", false),
+                substitute = optBoolean("substitute", false),
+                formationPlace = nullableString("formationPlace")
             ))
         }
     }

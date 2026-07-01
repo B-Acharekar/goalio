@@ -1,6 +1,7 @@
 package com.goalio.scores
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,7 +37,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -46,8 +51,11 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.goalio.scores.ui.theme.GoalioColors
 import kotlinx.coroutines.delay
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private val HomeLeagues = listOf(
@@ -72,11 +80,12 @@ fun PersonalizedHomeScreen(
     val context = LocalContext.current
     val metrics = rememberGoalioMetrics()
     var matches by remember { mutableStateOf(emptyList<ScheduleMatch>()) }
+    var standings by remember { mutableStateOf<LeagueStandings?>(null) }
     var loading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val today = remember { LocalDate.now() }
-    val fromDate = remember(today) { today.minusDays(1).toString() }
-    val toDate = remember(today) { today.plusDays(7).toString() }
+    val fromDate = remember(today) { today.minusDays(30).toString() }
+    val toDate = remember(today) { today.plusDays(120).toString() }
 
     LaunchedEffect(fromDate, toDate) {
         matches = MatchRepository.cachedFeed(context, fromDate, toDate)
@@ -87,8 +96,11 @@ fun PersonalizedHomeScreen(
                 .onSuccess { result ->
                     matches = result.matches
                     if (result.scoreChanged) {
-                        android.widget.Toast.makeText(context, "Live score updated", android.widget.Toast.LENGTH_SHORT).show()
+                        if (GoalioAppVisibility.isForeground) {
+                            android.widget.Toast.makeText(context, "Live score updated", android.widget.Toast.LENGTH_SHORT).show()
+                        }
                     }
+                    GoalioMatchNotifier.notifyBackgroundEvents(context, result.notificationEvents)
                 }
                 .onFailure {
                     errorMessage = if (matches.isEmpty()) {
@@ -101,9 +113,16 @@ fun PersonalizedHomeScreen(
             delay(MatchRepository.nextRefreshDelayMillis(context, matches))
         }
     }
+    LaunchedEffect(Unit) {
+        runCatching { GoalioBackendApi.getStandings("fifa.world") }
+            .onSuccess { standings = it }
+    }
 
     val liveMatches = matches.filter { it.state == "in" }
     val upcoming = matches.filter { it.state == "pre" }.take(12)
+    val todayUpcoming = matches.filter { it.state == "pre" && it.isTodayKickoff(today) }
+    val upcomingToday = todayUpcoming.take(3).ifEmpty { upcoming.take(3) }
+    val upcomingTitle = if (todayUpcoming.isEmpty() && upcomingToday.isNotEmpty()) "UPCOMING NEXT" else "UPCOMING TODAY"
     val finished = matches.filter { it.state == "post" }.take(8)
     val featured = liveMatches.firstOrNull() ?: upcoming.firstOrNull() ?: finished.firstOrNull()
 
@@ -113,51 +132,43 @@ fun PersonalizedHomeScreen(
             contentPadding = PaddingValues(start = metrics.horizontalPadding, end = metrics.horizontalPadding, top = metrics.dp(20), bottom = metrics.bottomBarPadding),
             verticalArrangement = Arrangement.spacedBy(metrics.dp(20))
         ) {
-            item { HomeTopBar() }
+            item { HomeTopBar(fallbackName) }
             item {
                 when {
                     loading -> HomeStateCard("Loading real match data...")
-                    errorMessage != null -> HomeStateCard(errorMessage.orEmpty(), action = "Retry")
+                    errorMessage != null -> HomeStateCard(errorMessage.orEmpty())
                     featured != null -> FeaturedMatchCard(featured, onOpenMatch)
-                    else -> HomeStateCard("No matches found from $fromDate to $toDate.")
+                    else -> HomeStateCard("Looking for the latest fixtures...")
                 }
             }
             if (!loading && errorMessage == null && matches.isNotEmpty()) {
                 item {
-                    SectionHeader("Live Action", "${liveMatches.size} live", onOpenMatches)
+                    SectionHeader("Live Action", "View All", onOpenMatches)
                     Spacer(Modifier.height(12.dp))
                     if (liveMatches.isEmpty()) {
                         MutedPill("No live matches right now")
                     } else {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            items(liveMatches.take(6), key = { "${it.league}:${it.matchId}" }) {
+                            items(liveMatches.take(3), key = { "${it.league}:${it.matchId}" }) {
                                 MatchMiniCard(it, onOpenMatch)
                             }
                         }
                     }
                 }
                 item {
-                    SectionHeader("Upcoming", "${upcoming.size} next", onOpenMatches)
+                    SectionHeader(upcomingTitle, "View All", onOpenMatches, compactTitle = true)
                     Spacer(Modifier.height(12.dp))
-                    if (upcoming.isEmpty()) {
+                    if (upcomingToday.isEmpty()) {
                         MutedPill("No upcoming fixtures in this window")
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            upcoming.take(6).forEach { ScheduleRow(it, onOpenMatch) }
+                            upcomingToday.forEach { ScheduleRow(it, onOpenMatch) }
                         }
                     }
                 }
-                item {
-                    SectionHeader("Finished", "${finished.size} recent", onOpenMatches)
-                    Spacer(Modifier.height(12.dp))
-                    if (finished.isEmpty()) {
-                        MutedPill("No finished matches in this window")
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            finished.take(4).forEach { ScheduleRow(it, onOpenMatch) }
-                        }
-                    }
-                }
+                item { WinProbabilityCard(featured) }
+                item { WorldCupHubCard(standings, onOpenMatches) }
+                item { FunZoneSection() }
             }
         }
         HomeBottomNav(Modifier.align(Alignment.BottomCenter), onOpenMatches)
@@ -165,13 +176,49 @@ fun PersonalizedHomeScreen(
 }
 
 @Composable
-private fun HomeTopBar() {
+private fun HomeTopBar(fallbackName: String?) {
     val metrics = rememberGoalioMetrics()
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text("GOALIO", color = GoalioColors.TextPrimary, fontSize = metrics.sp(24), fontWeight = FontWeight.Black, letterSpacing = if (metrics.compact) 3.sp else 5.sp, modifier = Modifier.weight(1f))
-        if (!metrics.compact) Text("Search", color = GoalioColors.TextSecondary, fontSize = metrics.sp(13), fontWeight = FontWeight.Bold)
-        Spacer(Modifier.width(metrics.dp(14)))
-        Text("Alerts", color = GoalioColors.TextSecondary, fontSize = metrics.sp(13), fontWeight = FontWeight.Bold)
+    Row(Modifier.fillMaxWidth().padding(top = metrics.dp(4)), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            "GOALIO",
+            color = GoalioColors.TextPrimary,
+            fontSize = metrics.sp(26),
+            fontWeight = FontWeight.Black,
+            letterSpacing = if (metrics.compact) 4.sp else 7.sp,
+            modifier = Modifier.weight(1f)
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(metrics.dp(14)), verticalAlignment = Alignment.CenterVertically) {
+            HeaderIcon("search")
+            HeaderIcon("bell")
+            HeaderIcon("gear")
+        }
+    }
+}
+
+@Composable
+private fun HeaderIcon(kind: String) {
+    Canvas(Modifier.size(24.dp)) {
+        val color = GoalioColors.Accent
+        when (kind) {
+            "search" -> {
+                drawCircle(color, radius = size.minDimension * .24f, center = Offset(size.width * .42f, size.height * .42f), style = Stroke(size.minDimension * .11f))
+                drawLine(color, Offset(size.width * .62f, size.height * .62f), Offset(size.width * .9f, size.height * .9f), size.minDimension * .11f, StrokeCap.Round)
+            }
+            "bell" -> {
+                drawArc(color, 205f, 130f, false, topLeft = Offset(size.width * .25f, size.height * .18f), size = androidx.compose.ui.geometry.Size(size.width * .5f, size.height * .58f), style = Stroke(size.minDimension * .1f, cap = StrokeCap.Round))
+                drawLine(color, Offset(size.width * .25f, size.height * .68f), Offset(size.width * .75f, size.height * .68f), size.minDimension * .1f, StrokeCap.Round)
+                drawCircle(color, radius = size.minDimension * .05f, center = Offset(size.width * .5f, size.height * .84f))
+            }
+            else -> {
+                drawCircle(color, radius = size.minDimension * .26f, center = center, style = Stroke(size.minDimension * .1f))
+                repeat(8) { index ->
+                    val angle = Math.toRadians((index * 45).toDouble())
+                    val start = Offset(center.x + kotlin.math.cos(angle).toFloat() * size.minDimension * .36f, center.y + kotlin.math.sin(angle).toFloat() * size.minDimension * .36f)
+                    val end = Offset(center.x + kotlin.math.cos(angle).toFloat() * size.minDimension * .46f, center.y + kotlin.math.sin(angle).toFloat() * size.minDimension * .46f)
+                    drawLine(color, start, end, size.minDimension * .08f, StrokeCap.Round)
+                }
+            }
+        }
     }
 }
 
@@ -179,35 +226,37 @@ private fun HomeTopBar() {
 private fun FeaturedMatchCard(match: ScheduleMatch, onOpenMatch: (ScheduleMatch) -> Unit) {
     val metrics = rememberGoalioMetrics()
     Surface(
-        color = GoalioColors.Surface1,
-        shape = RoundedCornerShape(metrics.dp(24)),
-        border = BorderStroke(1.dp, GoalioColors.CardBorder),
+        color = Color.Transparent,
+        shape = RoundedCornerShape(metrics.dp(10)),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = .12f)),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(Modifier.padding(metrics.dp(20)), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            Modifier
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF153020), Color(0xFF0B160D), Color(0xFF071007))
+                    )
+                )
+                .padding(metrics.dp(22)),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 MatchStatusPill(match)
                 Spacer(Modifier.weight(1f))
                 Text(match.leagueLabel(), color = GoalioColors.TextSecondary, fontSize = metrics.sp(12), fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Spacer(Modifier.height(metrics.dp(22)))
+            Spacer(Modifier.height(metrics.dp(26)))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TeamBadge(match.homeTeam, Modifier.weight(1f))
                 Text(scoreLine(match), color = GoalioColors.TextPrimary, fontSize = metrics.sp(42), fontWeight = FontWeight.Black)
                 TeamBadge(match.awayTeam, Modifier.weight(1f))
             }
-            match.venue?.let { venue ->
-                val venueText = listOfNotNull(venue.name, venue.city).joinToString(", ")
-                if (venueText.isNotBlank()) {
-                    Spacer(Modifier.height(metrics.dp(16)))
-                    Text(venueText, color = GoalioColors.TextTertiary, fontSize = metrics.sp(13), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-            Spacer(Modifier.height(metrics.dp(20)))
+            Spacer(Modifier.height(metrics.dp(28)))
             Button(
                 onClick = { onOpenMatch(match) },
                 colors = ButtonDefaults.buttonColors(containerColor = GoalioColors.Accent, contentColor = GoalioColors.TextPrimary),
-                shape = RoundedCornerShape(metrics.dp(14)),
+                shape = RoundedCornerShape(metrics.dp(12)),
                 modifier = Modifier.fillMaxWidth().height(metrics.dp(54))
             ) {
                 Text("Match Details", fontSize = metrics.sp(16), fontWeight = FontWeight.Black)
@@ -220,9 +269,9 @@ private fun FeaturedMatchCard(match: ScheduleMatch, onOpenMatch: (ScheduleMatch)
 private fun TeamBadge(team: MatchTeamInfo?, modifier: Modifier = Modifier) {
     val metrics = rememberGoalioMetrics()
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(metrics.dp(68)).clip(CircleShape).background(GoalioColors.Surface2), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(metrics.dp(70)).clip(CircleShape).background(GoalioColors.Surface2), contentAlignment = Alignment.Center) {
             if (!team?.logo.isNullOrBlank()) {
-                AsyncImage(team?.logo, contentDescription = team?.name, contentScale = ContentScale.Fit, modifier = Modifier.size(metrics.dp(52)))
+                AsyncImage(team?.logo, contentDescription = team?.name, contentScale = ContentScale.Fit, modifier = Modifier.size(metrics.dp(56)))
             } else {
                 Text(team?.abbreviation ?: "TBD", color = GoalioColors.TextPrimary, fontWeight = FontWeight.Black, fontSize = metrics.sp(15))
             }
@@ -231,7 +280,7 @@ private fun TeamBadge(team: MatchTeamInfo?, modifier: Modifier = Modifier) {
         Text(
             team?.abbreviation ?: team?.shortName ?: team?.name ?: "TBD",
             color = GoalioColors.TextPrimary,
-            fontSize = metrics.sp(17),
+            fontSize = metrics.sp(19),
             fontWeight = FontWeight.Black,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -240,10 +289,17 @@ private fun TeamBadge(team: MatchTeamInfo?, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SectionHeader(title: String, action: String, onAction: () -> Unit) {
+private fun SectionHeader(title: String, action: String, onAction: () -> Unit, compactTitle: Boolean = false) {
     val metrics = rememberGoalioMetrics()
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, color = GoalioColors.TextPrimary, fontSize = metrics.sp(23), fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+        Text(
+            title,
+            color = GoalioColors.TextPrimary,
+            fontSize = metrics.sp(if (compactTitle) 13 else 23),
+            fontWeight = FontWeight.Black,
+            letterSpacing = if (compactTitle) 2.sp else 0.sp,
+            modifier = Modifier.weight(1f)
+        )
         Text(action, color = GoalioColors.TextTertiary, fontSize = metrics.sp(13), fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onAction))
     }
 }
@@ -253,9 +309,9 @@ private fun MatchMiniCard(match: ScheduleMatch, onOpenMatch: (ScheduleMatch) -> 
     val metrics = rememberGoalioMetrics()
     Surface(
         color = GoalioColors.Surface1,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(metrics.dp(10)),
         border = BorderStroke(1.dp, GoalioColors.CardBorder),
-        modifier = Modifier.width(metrics.dp(218)).height(metrics.dp(128)).clickable { onOpenMatch(match) }
+        modifier = Modifier.width(metrics.dp(210)).height(metrics.dp(136)).clickable { onOpenMatch(match) }
     ) {
         Column(Modifier.padding(metrics.dp(15)), verticalArrangement = Arrangement.SpaceBetween) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -273,24 +329,157 @@ private fun MatchMiniCard(match: ScheduleMatch, onOpenMatch: (ScheduleMatch) -> 
 private fun ScheduleRow(match: ScheduleMatch, onOpenMatch: (ScheduleMatch) -> Unit) {
     val metrics = rememberGoalioMetrics()
     Surface(
-        color = GoalioColors.Surface1,
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, GoalioColors.CardBorder),
+        color = Color(0xFF1F1F21),
+        shape = RoundedCornerShape(metrics.dp(11)),
         modifier = Modifier.fillMaxWidth().clickable { onOpenMatch(match) }
     ) {
-        Row(Modifier.padding(horizontal = metrics.dp(14), vertical = metrics.dp(13)), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.width(metrics.dp(74))) {
-                Text(formatKickoff(match.kickoff), color = GoalioColors.TextPrimary, fontSize = metrics.sp(16), fontWeight = FontWeight.Bold)
-                Text(match.leagueLabel(short = true), color = GoalioColors.TextTertiary, fontSize = metrics.sp(11), fontWeight = FontWeight.Black)
-            }
-            Column(Modifier.weight(1f)) {
-                TeamScoreLine(match.homeTeam)
-                Spacer(Modifier.height(metrics.dp(6)))
-                TeamScoreLine(match.awayTeam)
-            }
-            Text(match.statusLabel(), color = statusColor(match.state), fontSize = metrics.sp(11), fontWeight = FontWeight.Black, maxLines = 1)
+        Row(Modifier.padding(horizontal = metrics.dp(16), vertical = metrics.dp(16)), verticalAlignment = Alignment.CenterVertically) {
+            Text(formatKickoff(match.kickoff), color = GoalioColors.TextSecondary, fontSize = metrics.sp(17), fontWeight = FontWeight.Medium)
+            Spacer(Modifier.width(metrics.dp(18)))
+            Text(match.compactName(), color = GoalioColors.TextSecondary, fontSize = metrics.sp(17), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(">", color = GoalioColors.TextSecondary, fontSize = metrics.sp(26), fontWeight = FontWeight.Black)
         }
     }
+}
+
+@Composable
+private fun WinProbabilityCard(match: ScheduleMatch?) {
+    val metrics = rememberGoalioMetrics()
+    val homeName = match?.homeTeam?.abbreviation ?: match?.homeTeam?.shortName ?: match?.homeTeam?.name ?: "HOME"
+    val awayName = match?.awayTeam?.abbreviation ?: match?.awayTeam?.shortName ?: match?.awayTeam?.name ?: "AWAY"
+    val homeProbability = match.winProbability()
+    Surface(
+        color = Color(0xFF1E1E20),
+        shape = RoundedCornerShape(metrics.dp(10)),
+        border = BorderStroke(1.dp, GoalioColors.TextTertiary.copy(alpha = .55f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(metrics.dp(20))) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TrendIcon(Modifier.size(metrics.dp(25)), Color.White)
+                Spacer(Modifier.width(metrics.dp(10)))
+                Text("Win Probability", color = GoalioColors.TextPrimary, fontSize = metrics.sp(23), fontWeight = FontWeight.Black)
+            }
+            Spacer(Modifier.height(metrics.dp(20)))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(homeName.uppercase().take(12), color = GoalioColors.TextSecondary, fontSize = metrics.sp(12), fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+                Text(awayName.uppercase().take(12), color = GoalioColors.TextSecondary, fontSize = metrics.sp(12), fontWeight = FontWeight.Black)
+            }
+            Spacer(Modifier.height(metrics.dp(10)))
+            Row(Modifier.fillMaxWidth().height(metrics.dp(12)).clip(RoundedCornerShape(50))) {
+                Box(Modifier.weight(homeProbability).fillMaxSize().background(Color.White))
+                Box(Modifier.weight(100f - homeProbability).fillMaxSize().background(Color(0xFFE22D13)))
+            }
+            Spacer(Modifier.height(metrics.dp(20)))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("${homeProbability.toInt()}%", color = GoalioColors.TextSecondary, fontSize = metrics.sp(18))
+                Spacer(Modifier.width(metrics.dp(18)))
+                Text("${(100f - homeProbability).toInt()}%", color = Color(0xFFE22D13), fontSize = metrics.sp(18))
+                Spacer(Modifier.weight(1f))
+                Surface(color = GoalioColors.Accent, shape = RoundedCornerShape(50)) {
+                    Text("View Analysis", color = Color.White, fontSize = metrics.sp(16), modifier = Modifier.padding(horizontal = metrics.dp(26), vertical = metrics.dp(12)))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorldCupHubCard(standings: LeagueStandings?, onViewHub: () -> Unit) {
+    val metrics = rememberGoalioMetrics()
+    val rows = remember(standings) { standings?.teams.orEmpty().sortedWith(compareBy<StandingTeamInfo> { it.group ?: "" }.thenBy { it.rank ?: 999 }).take(6) }
+    Surface(
+        color = Color(0xFF202022),
+        shape = RoundedCornerShape(metrics.dp(10)),
+        border = BorderStroke(1.dp, GoalioColors.CardBorder),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column {
+            Row(
+                Modifier.fillMaxWidth().background(GoalioColors.Accent).padding(horizontal = metrics.dp(18), vertical = metrics.dp(16)),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("World Cup Hub", color = Color.White, fontSize = metrics.sp(22), fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+                Text("View Hub", color = Color.White, fontSize = metrics.sp(13), fontWeight = FontWeight.Black, modifier = Modifier.clickable(onClick = onViewHub))
+            }
+            Column(Modifier.padding(metrics.dp(18)), verticalArrangement = Arrangement.spacedBy(metrics.dp(13))) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Rank", color = Color(0xFFE4D7BC), fontSize = metrics.sp(15), fontWeight = FontWeight.Black, modifier = Modifier.width(metrics.dp(50)))
+                    Text("Team", color = Color(0xFFE4D7BC), fontSize = metrics.sp(15), fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+                    Text("Stage", color = Color(0xFFE4D7BC), fontSize = metrics.sp(15), fontWeight = FontWeight.Black, modifier = Modifier.width(metrics.dp(62)))
+                    Text("PTS", color = Color(0xFFE4D7BC), fontSize = metrics.sp(15), fontWeight = FontWeight.Black)
+                }
+                if (rows.isEmpty()) {
+                    Text("Standings will appear when ESPN publishes the current table.", color = GoalioColors.TextSecondary, fontSize = metrics.sp(14), lineHeight = metrics.sp(20))
+                } else {
+                    rows.forEach { team ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text((team.rank ?: rows.indexOf(team) + 1).toString(), color = GoalioColors.TextSecondary, fontSize = metrics.sp(16), fontWeight = FontWeight.Bold, modifier = Modifier.width(metrics.dp(50)))
+                            TeamStandingName(team, Modifier.weight(1f))
+                            Text(team.stageLabel(), color = GoalioColors.TextSecondary, fontSize = metrics.sp(12), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(metrics.dp(62)))
+                            Text((team.points ?: 0).toString(), color = GoalioColors.TextSecondary, fontSize = metrics.sp(16), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TeamStandingName(team: StandingTeamInfo, modifier: Modifier = Modifier) {
+    val metrics = rememberGoalioMetrics()
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        if (!team.logo.isNullOrBlank()) {
+            AsyncImage(team.logo, contentDescription = team.name, contentScale = ContentScale.Fit, modifier = Modifier.size(metrics.dp(18)))
+        } else {
+            Box(Modifier.size(metrics.dp(14)).clip(CircleShape).background(GoalioColors.Accent))
+        }
+        Spacer(Modifier.width(metrics.dp(10)))
+        Text(team.name, color = GoalioColors.TextSecondary, fontSize = metrics.sp(16), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun FunZoneSection() {
+    val metrics = rememberGoalioMetrics()
+    Column(verticalArrangement = Arrangement.spacedBy(metrics.dp(16))) {
+        Text("Fun Zone", color = GoalioColors.TextPrimary, fontSize = metrics.sp(23), fontWeight = FontWeight.Black)
+        Row(horizontalArrangement = Arrangement.spacedBy(metrics.dp(16))) {
+            FunTile("Daily Trivia", Modifier.weight(1f))
+            FunTile("Guess Player", Modifier.weight(1f))
+        }
+        Surface(
+            color = Color.Transparent,
+            shape = RoundedCornerShape(metrics.dp(10)),
+            modifier = Modifier.fillMaxWidth().height(metrics.dp(150))
+        ) {
+            Box(
+                Modifier.background(Brush.horizontalGradient(listOf(Color(0xFFD37500), Color(0xFF141108)))).padding(metrics.dp(22))
+            ) {
+                Text("Roll & Win\nEarn points for every goal predicted", color = Color.White, fontSize = metrics.sp(18), lineHeight = metrics.sp(28), fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.CenterStart))
+            }
+        }
+    }
+}
+
+@Composable
+private fun FunTile(label: String, modifier: Modifier = Modifier) {
+    val metrics = rememberGoalioMetrics()
+    Surface(color = Color.Black, shape = RoundedCornerShape(metrics.dp(10)), border = BorderStroke(1.dp, GoalioColors.CardBorder), modifier = modifier.height(metrics.dp(104))) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(label, color = GoalioColors.TextSecondary, fontSize = metrics.sp(16), fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun TrendIcon(modifier: Modifier, color: Color) = Canvas(modifier) {
+    drawLine(color, Offset(size.width * .12f, size.height * .7f), Offset(size.width * .34f, size.height * .45f), size.minDimension * .11f, StrokeCap.Round)
+    drawLine(color, Offset(size.width * .34f, size.height * .45f), Offset(size.width * .52f, size.height * .58f), size.minDimension * .11f, StrokeCap.Round)
+    drawLine(color, Offset(size.width * .52f, size.height * .58f), Offset(size.width * .82f, size.height * .22f), size.minDimension * .11f, StrokeCap.Round)
+    drawLine(color, Offset(size.width * .82f, size.height * .22f), Offset(size.width * .88f, size.height * .42f), size.minDimension * .08f, StrokeCap.Round)
+    drawLine(color, Offset(size.width * .82f, size.height * .22f), Offset(size.width * .62f, size.height * .22f), size.minDimension * .08f, StrokeCap.Round)
 }
 
 @Composable
@@ -314,10 +503,20 @@ private fun TeamScoreLine(team: MatchTeamInfo?) {
 @Composable
 private fun MatchStatusPill(match: ScheduleMatch) {
     val metrics = rememberGoalioMetrics()
-    val color = statusColor(match.state)
+    var now by remember(match.matchId, match.kickoff) { mutableStateOf(Instant.now()) }
+    LaunchedEffect(match.matchId, match.kickoff, match.state) {
+        if (match.state != "pre") return@LaunchedEffect
+        while (true) {
+            now = Instant.now()
+            delay(1_000)
+        }
+    }
+    val countdown = remember(match.kickoff, now) { match.countdownLabel(now) }
+    val color = if (countdown != null) GoalioColors.Accent else statusColor(match.state)
+    val label = countdown ?: match.statusLabel().uppercase()
     Surface(color = GoalioColors.Surface2, shape = RoundedCornerShape(50), border = BorderStroke(1.dp, color)) {
         Text(
-            match.statusLabel().uppercase(),
+            label,
             color = color,
             fontSize = metrics.sp(11),
             fontWeight = FontWeight.Black,
@@ -375,11 +574,13 @@ private fun HomeBottomNav(modifier: Modifier = Modifier, onOpenMatches: () -> Un
 private fun RowScope.BottomTab(label: String, selected: Boolean, onClick: () -> Unit = {}) {
     val metrics = rememberGoalioMetrics()
     val fg = if (selected) GoalioColors.TextPrimary else GoalioColors.InactiveIcon
-    Surface(color = Color.Transparent, shape = RoundedCornerShape(50), modifier = Modifier.weight(1f).height(metrics.dp(48)).clickable(onClick = onClick)) {
+    Surface(
+        color = if (selected) GoalioColors.Accent else Color.Transparent,
+        shape = RoundedCornerShape(50),
+        modifier = Modifier.weight(1f).height(metrics.dp(54)).clickable(onClick = onClick)
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text(label, color = fg, fontSize = metrics.sp(11), fontWeight = FontWeight.Black, maxLines = 1)
-            Spacer(Modifier.height(metrics.dp(5)))
-            Box(Modifier.width(metrics.dp(24)).height(3.dp).background(if (selected) GoalioColors.Accent else Color.Transparent, RoundedCornerShape(50)))
         }
     }
 }
@@ -389,6 +590,38 @@ private fun ScheduleMatch.statusLabel(): String = when (state) {
     "in" -> statusDescription ?: status ?: "Live"
     "post" -> statusDescription ?: status ?: "Finished"
     else -> statusDescription ?: status ?: "Match"
+}
+
+private fun ScheduleMatch.compactName(): String {
+    val home = homeTeam?.shortName ?: homeTeam?.name ?: "TBD"
+    val away = awayTeam?.shortName ?: awayTeam?.name ?: "TBD"
+    return "$home vs $away"
+}
+
+private fun ScheduleMatch.isTodayKickoff(today: LocalDate): Boolean {
+    val localDate = runCatching {
+        OffsetDateTime.parse(kickoff)
+            .atZoneSameInstant(ZoneId.systemDefault())
+            .toLocalDate()
+    }.getOrNull()
+    return localDate == today
+}
+
+private fun ScheduleMatch?.winProbability(): Float {
+    if (this == null) return 50f
+    val home = homeTeam?.score ?: return 50f
+    val away = awayTeam?.score ?: return 50f
+    return (50f + (home - away) * 10f).coerceIn(25f, 75f)
+}
+
+private fun StandingTeamInfo.stageLabel(): String {
+    val source = stage ?: group
+    if (source.isNullOrBlank()) return "-"
+    val normalized = source
+        .replace("Group", "G", ignoreCase = true)
+        .replace("Round", "R", ignoreCase = true)
+        .replace(" ", "")
+    return normalized.take(8).uppercase()
 }
 
 private fun ScheduleMatch.leagueLabel(short: Boolean = false): String = when (league) {
@@ -412,8 +645,27 @@ private fun scoreLine(match: ScheduleMatch): String {
 private fun formatKickoff(value: String?): String {
     if (value.isNullOrBlank()) return "--:--"
     return runCatching {
-        OffsetDateTime.parse(value).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm"))
+        OffsetDateTime.parse(value)
+            .atZoneSameInstant(ZoneId.systemDefault())
+            .toLocalTime()
+            .format(DateTimeFormatter.ofPattern("HH:mm"))
     }.getOrDefault(value.take(5))
+}
+
+private fun ScheduleMatch.countdownLabel(now: Instant): String? {
+    if (state != "pre" || kickoff.isNullOrBlank()) return null
+    val kickoffInstant = runCatching { OffsetDateTime.parse(kickoff).toInstant() }.getOrNull() ?: return null
+    val remaining = Duration.between(now, kickoffInstant)
+    if (remaining.isNegative || remaining.isZero) return "STARTING"
+    val days = remaining.toDays()
+    val hours = remaining.toHours() % 24
+    val minutes = remaining.toMinutes() % 60
+    return when {
+        days > 0 -> "${days}d ${hours}h"
+        hours > 0 -> "${hours}h ${minutes}m"
+        minutes > 0 -> "${minutes}m"
+        else -> "${remaining.seconds.coerceAtLeast(1)}s"
+    }
 }
 
 private fun statusColor(state: String?): Color = when (state) {

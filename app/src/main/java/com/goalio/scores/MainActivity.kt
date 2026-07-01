@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.ui.unit.dp
 import com.goalio.scores.ui.theme.GoalioTheme
 import com.goalio.scores.ui.theme.GoalioColors
@@ -65,6 +66,16 @@ import kotlinx.coroutines.delay
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
+    override fun onResume() {
+        super.onResume()
+        GoalioAppVisibility.markForeground()
+    }
+
+    override fun onPause() {
+        GoalioAppVisibility.markBackground()
+        super.onPause()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -248,104 +259,24 @@ fun GoalioBackground(backgroundAlpha: Float = 1f, content: @Composable BoxScope.
 @Composable
 fun SplashScreen() {
     val metrics = rememberGoalioMetrics()
-    val transition = rememberInfiniteTransition(label = "splash geometry")
-    val sweep = transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(3600, easing = LinearEasing)),
-        label = "sweep"
-    ).value
-    val pulse = transition.animateFloat(
-        initialValue = .65f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "pulse"
-    ).value
-
     GoalioBackground {
         Box(Modifier.fillMaxSize()) {
-            Canvas(Modifier.fillMaxSize()) {
-                val center = Offset(size.width / 2f, size.height * .42f)
-                val radius = size.minDimension * .28f
-                repeat(4) { ring ->
-                    drawCircle(
-                        color = Color.White.copy(alpha = .025f + ring * .012f),
-                        radius = radius * (.62f + ring * .34f) * pulse,
-                        center = center,
-                        style = Stroke(width = 2.2f)
-                    )
-                }
-                repeat(8) { index ->
-                    val angle = Math.toRadians((sweep + index * 60).toDouble())
-                    val start = Offset(
-                        center.x + kotlin.math.cos(angle).toFloat() * radius * .45f,
-                        center.y + kotlin.math.sin(angle).toFloat() * radius * .45f
-                    )
-                    val end = Offset(
-                        center.x + kotlin.math.cos(angle).toFloat() * radius * 1.1f,
-                        center.y + kotlin.math.sin(angle).toFloat() * radius * 1.1f
-                    )
-                    drawLine(
-                        color = if (index % 2 == 0) GoalioColors.TextPrimary else GoalioColors.TextSecondary,
-                        start = start,
-                        end = end,
-                        strokeWidth = 1.2f,
-                        alpha = .08f
-                    )
-                }
-                drawArc(
-                    color = GoalioColors.Accent,
-                    startAngle = sweep,
-                    sweepAngle = 80f,
-                    useCenter = false,
-                    topLeft = Offset(center.x - radius, center.y - radius),
-                    size = Size(radius * 2, radius * 2),
-                    style = Stroke(width = 2.2f),
-                    alpha = .22f
-                )
-            }
-            Surface(
-                color = GoalioColors.Surface1,
-                shape = RoundedCornerShape(metrics.dp(34)),
-                border = androidx.compose.foundation.BorderStroke(1.dp, GoalioColors.CardBorder),
+            Image(
+                painter = painterResource(R.drawable.goalio_logo),
+                contentDescription = "Goalio",
+                contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(metrics.dp(if (metrics.compact) 112 else 132))
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_launcher_foreground),
-                        contentDescription = "Goalio",
-                        modifier = Modifier.size(metrics.dp(if (metrics.compact) 92 else 108))
-                    )
-                }
-            }
-            Column(
+                    .offset(y = metrics.dp(-70))
+                    .size(metrics.dp(if (metrics.compact) 150 else 180))
+            )
+            LoadingGoal(
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .offset(y = metrics.dp(if (metrics.compact) 110 else 132))
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = metrics.dp(if (metrics.compact) 46 else 66))
                     .padding(horizontal = metrics.horizontalPadding)
-                    .fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "GOALIO",
-                    color = GoalioColors.TextPrimary,
-                    fontSize = metrics.sp(27),
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 7.sp,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.height(5.dp))
-                Text(
-                    text = "LIVE FOOTBALL SCORES",
-                    color = GoalioColors.TextSecondary,
-                    fontSize = metrics.sp(11),
-                    fontWeight = FontWeight.Normal,
-                    letterSpacing = 3.sp,
-                    textAlign = TextAlign.Center
-                )
-            }
+            )
         }
     }
 }
@@ -384,17 +315,17 @@ private fun LoadingGoal(modifier: Modifier = Modifier) {
             Modifier
                 .align(Alignment.CenterStart)
                 .width(trackWidth - 20.dp)
-                .size(height = 5.dp, width = trackWidth - 20.dp)
+                .height(5.dp)
                 .clip(RoundedCornerShape(50))
-                .background(GoalioColors.ProgressBackground)
+                .background(Color(0xFF9B9B9B))
         )
         Box(
             Modifier
                 .align(Alignment.CenterStart)
                 .width((trackWidth - 20.dp) * progress)
-                .size(height = 5.dp, width = (trackWidth - 20.dp) * progress)
+                .height(5.dp)
                 .clip(RoundedCornerShape(50))
-                .background(Color.White)
+                .background(GoalioColors.Accent)
         )
         Image(
             painter = painterResource(R.drawable.football_goal),

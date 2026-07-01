@@ -8,7 +8,18 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class MatchFeedResult(val matches: List<ScheduleMatch>, val scoreChanged: Boolean)
+data class MatchNotificationEvent(
+    val id: String,
+    val title: String,
+    val message: String,
+    val kickoffEpochMillis: Long? = null
+)
+
+data class MatchFeedResult(
+    val matches: List<ScheduleMatch>,
+    val scoreChanged: Boolean,
+    val notificationEvents: List<MatchNotificationEvent> = emptyList()
+)
 
 object MatchRepository {
     val leagues = listOf(
@@ -31,7 +42,8 @@ object MatchRepository {
             .orEmpty()
 
     suspend fun refreshFeed(context: Context, from: String, to: String): MatchFeedResult {
-        val before = cachedFeed(context, from, to).scoreSignature()
+        val previousMatches = cachedFeed(context, from, to)
+        val before = previousMatches.scoreSignature()
         val matches = coroutineScope {
             leagues.map { league ->
                 async {
@@ -42,13 +54,14 @@ object MatchRepository {
         }.distinctBy { "${it.league}:${it.matchId}" }
             .sortedWith(compareBy<ScheduleMatch> { stateRank(it.state) }.thenBy { it.kickoff.orEmpty() })
         val changed = before.isNotBlank() && before != matches.scoreSignature()
+        val notificationEvents = matchNotificationEvents(previousMatches, matches)
         withContext(Dispatchers.IO) {
             context.cachePrefs().edit()
                 .putString(feedKey(from, to), JSONArray(matches.map { it.toJson() }).toString())
                 .apply()
             if (changed) markGoalBoost(context)
         }
-        return MatchFeedResult(matches, changed)
+        return MatchFeedResult(matches, changed, notificationEvents)
     }
 
     fun cachedDetail(context: Context, league: String, matchId: String): MatchDetail? =
@@ -87,6 +100,44 @@ object MatchRepository {
 
     private fun detailKey(league: String, matchId: String) = "detail_${league}_$matchId"
 }
+
+private fun matchNotificationEvents(
+    previous: List<ScheduleMatch>,
+    current: List<ScheduleMatch>
+): List<MatchNotificationEvent> {
+    if (previous.isEmpty()) return emptyList()
+    val previousByKey = previous.associateBy { "${it.league}:${it.matchId}" }
+    return current.mapNotNull { match ->
+        val previousMatch = previousByKey["${match.league}:${match.matchId}"] ?: return@mapNotNull null
+        when {
+            previousMatch.state != "in" && match.state == "in" -> MatchNotificationEvent(
+                id = "start_${match.league}_${match.matchId}",
+                title = "Match started",
+                message = "${match.compactNotificationName()} is live now",
+                kickoffEpochMillis = match.kickoffEpochMillis()
+            )
+            match.state == "in" && previousMatch.scorePair() != match.scorePair() -> MatchNotificationEvent(
+                id = "goal_${match.league}_${match.matchId}_${match.scorePair()}",
+                title = "Goal update",
+                message = "${match.compactNotificationName()} ${match.scorePair().replace(":", " - ")}",
+                kickoffEpochMillis = match.kickoffEpochMillis()
+            )
+            else -> null
+        }
+    }
+}
+
+private fun ScheduleMatch.scorePair(): String =
+    "${homeTeam?.score ?: "-"}:${awayTeam?.score ?: "-"}"
+
+private fun ScheduleMatch.compactNotificationName(): String {
+    val home = homeTeam?.abbreviation ?: homeTeam?.shortName ?: homeTeam?.name ?: "Home"
+    val away = awayTeam?.abbreviation ?: awayTeam?.shortName ?: awayTeam?.name ?: "Away"
+    return "$home vs $away"
+}
+
+private fun ScheduleMatch.kickoffEpochMillis(): Long? =
+    runCatching { java.time.OffsetDateTime.parse(kickoff).toInstant().toEpochMilli() }.getOrNull()
 
 fun stateRank(state: String?): Int = when (state) {
     "in" -> 0
@@ -136,8 +187,11 @@ private fun MatchDetail.toJson() = JSONObject().apply {
     putNullable("homeTeam", homeTeam?.toJson())
     putNullable("awayTeam", awayTeam?.toJson())
     putNullable("venue", venue?.toJson())
+    put("officials", JSONArray(officials.map { it.toJson() }))
+    putNullable("weather", weather?.toJson())
     put("teamStats", JSONArray(teamStats.map { it.toJson() }))
     put("playerLeaders", JSONArray(playerLeaders.map { it.toJson() }))
+    put("lineups", JSONArray(lineups.map { it.toJson() }))
     put("events", JSONArray(events.map { it.toJson() }))
     putNullable("summary", summary)
 }
@@ -166,6 +220,37 @@ private fun MatchLeaderPlayer.toJson() = JSONObject().apply {
     putNullable("espnUrl", espnUrl)
     putNullable("mainStat", mainStat)
     put("stats", JSONArray(stats.map { it.toJson() }))
+}
+
+private fun MatchOfficialInfo.toJson() = JSONObject().apply {
+    putNullable("name", name)
+    putNullable("role", role)
+}
+
+private fun MatchWeatherInfo.toJson() = JSONObject().apply {
+    putNullable("displayValue", displayValue)
+    putNullable("temperature", temperature)
+    putNullable("condition", condition)
+}
+
+private fun TeamLineupInfo.toJson() = JSONObject().apply {
+    putNullable("teamId", teamId)
+    putNullable("teamName", teamName)
+    putNullable("formation", formation)
+    putNullable("coach", coach)
+    put("starters", JSONArray(starters.map { it.toJson() }))
+    put("substitutes", JSONArray(substitutes.map { it.toJson() }))
+}
+
+private fun LineupPlayerInfo.toJson() = JSONObject().apply {
+    putNullable("id", id)
+    put("name", name)
+    putNullable("position", position)
+    putNullable("jersey", jersey)
+    put("starter", starter)
+    put("captain", captain)
+    put("substitute", substitute)
+    putNullable("formationPlace", formationPlace)
 }
 
 private fun MatchTimelineEvent.toJson() = JSONObject().apply {
@@ -207,8 +292,11 @@ private fun JSONObject.toMatchDetail() = MatchDetail(
     homeTeam = optJSONObject("homeTeam")?.toMatchTeamInfo(),
     awayTeam = optJSONObject("awayTeam")?.toMatchTeamInfo(),
     venue = optJSONObject("venue")?.toMatchVenueInfo(),
+    officials = optJSONArray("officials").toMatchOfficials(),
+    weather = optJSONObject("weather")?.toMatchWeatherInfo(),
     teamStats = optJSONArray("teamStats").toTeamStatsBlocks(),
     playerLeaders = optJSONArray("playerLeaders").toLeaderGroups(),
+    lineups = optJSONArray("lineups").toTeamLineups(),
     events = optJSONArray("events").toTimelineEvents(),
     summary = nullableString("summary")
 )
@@ -226,6 +314,18 @@ private fun JSONObject.toMatchVenueInfo() = MatchVenueInfo(
     name = nullableString("name"),
     city = nullableString("city")
 )
+
+private fun JSONObject.toMatchWeatherInfo() = MatchWeatherInfo(
+    displayValue = nullableString("displayValue"),
+    temperature = nullableString("temperature"),
+    condition = nullableString("condition")
+)
+
+private fun JSONArray?.toMatchOfficials(): List<MatchOfficialInfo> = buildList {
+    if (this@toMatchOfficials != null) for (index in 0 until length()) getJSONObject(index).run {
+        add(MatchOfficialInfo(nullableString("name"), nullableString("role")))
+    }
+}
 
 private fun JSONArray?.toTeamStatsBlocks(): List<TeamStatsBlock> = buildList {
     if (this@toTeamStatsBlocks != null) for (index in 0 until length()) getJSONObject(index).run {
@@ -255,6 +355,34 @@ private fun JSONArray?.toLeaderPlayers(): List<MatchLeaderPlayer> = buildList {
             espnUrl = nullableString("espnUrl"),
             mainStat = nullableString("mainStat"),
             stats = optJSONArray("stats").toMatchStats()
+        ))
+    }
+}
+
+private fun JSONArray?.toTeamLineups(): List<TeamLineupInfo> = buildList {
+    if (this@toTeamLineups != null) for (index in 0 until length()) getJSONObject(index).run {
+        add(TeamLineupInfo(
+            teamId = nullableString("teamId"),
+            teamName = nullableString("teamName"),
+            formation = nullableString("formation"),
+            coach = nullableString("coach"),
+            starters = optJSONArray("starters").toLineupPlayers(),
+            substitutes = optJSONArray("substitutes").toLineupPlayers()
+        ))
+    }
+}
+
+private fun JSONArray?.toLineupPlayers(): List<LineupPlayerInfo> = buildList {
+    if (this@toLineupPlayers != null) for (index in 0 until length()) getJSONObject(index).run {
+        add(LineupPlayerInfo(
+            id = nullableString("id"),
+            name = nullableString("name") ?: "Player",
+            position = nullableString("position"),
+            jersey = nullableString("jersey"),
+            starter = optBoolean("starter", false),
+            captain = optBoolean("captain", false),
+            substitute = optBoolean("substitute", false),
+            formationPlace = nullableString("formationPlace")
         ))
     }
 }

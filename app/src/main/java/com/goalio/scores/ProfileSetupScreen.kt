@@ -131,6 +131,7 @@ fun ProfileSetupScreen(
     var loadingMoreTeams by remember { mutableStateOf(false) }
     var loadingMorePlayers by remember { mutableStateOf(false) }
     var catalogError by remember { mutableStateOf<String?>(null) }
+    var catalogReloadKey by remember { mutableStateOf(0) }
     var teamSelectionError by remember { mutableStateOf<String?>(null) }
     var playerSelectionError by remember { mutableStateOf<String?>(null) }
     var submitting by remember { mutableStateOf(false) }
@@ -165,23 +166,26 @@ fun ProfileSetupScreen(
             .toList()
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(catalogReloadKey) {
+        catalogLoading = true
         catalogError = null
-        val cached = ProfileCatalogRepository.cached()
+        val cached = if (catalogReloadKey == 0) ProfileCatalogRepository.cached() else null
         if (cached != null) {
             teamCatalog = cached.teams
             playerCatalog = cached.players
             nextTeamCursor = cached.nextTeamCursor
             nextPlayerCursor = cached.nextPlayerCursor
+            catalogError = cached.catalogErrorMessage()
             catalogLoading = false
             return@LaunchedEffect
         }
-        runCatching { ProfileCatalogRepository.preload(context.applicationContext) }
+        runCatching { ProfileCatalogRepository.preload(context.applicationContext, force = catalogReloadKey > 0) }
             .onSuccess { catalog ->
                 teamCatalog = catalog.teams
                 playerCatalog = catalog.players
                 nextTeamCursor = catalog.nextTeamCursor
                 nextPlayerCursor = catalog.nextPlayerCursor
+                catalogError = catalog.catalogErrorMessage()
             }
             .onFailure { catalogError = it.userFacingBackendMessage("Could not load teams and players.") }
         catalogLoading = false
@@ -220,7 +224,7 @@ fun ProfileSetupScreen(
     BackHandler(onBack = onBack)
     GoalioBackground(.18f) {
         Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
-            ProfileHeader(onBack)
+            ProfileHeader(onBack, onSkip)
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(start = metrics.horizontalPadding, end = metrics.horizontalPadding, top = metrics.dp(10), bottom = metrics.dp(24)),
@@ -234,9 +238,8 @@ fun ProfileSetupScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(Modifier.padding(metrics.dp(18))) {
-                            Text("Set up your profile", color = Color.White, fontSize = metrics.sp(26), fontWeight = FontWeight.Bold)
-                            Text("Make Goalio yours. You can change these anytime.", color = GoalioColors.Body, fontSize = metrics.sp(14), lineHeight = metrics.sp(20))
-                            Spacer(Modifier.height(24.dp))
+                            Text("Identity", color = Color.White, fontSize = metrics.sp(25), fontWeight = FontWeight.Black)
+                            Spacer(Modifier.height(20.dp))
                             LabeledInput("FULL NAME", "e.g., Alex Morgan", fullName, { fullName = it }, true)
                             if (fullName.isNotBlank() && !fullNameValid) {
                                 FieldMessage("Enter first and last name; every name must have at least 2 letters.", false)
@@ -260,19 +263,29 @@ fun ProfileSetupScreen(
                                 usernameAvailable == false -> FieldMessage("That username is already taken", false)
                                 usernameError != null -> FieldMessage(usernameError.orEmpty(), false)
                             }
-                            Spacer(Modifier.height(30.dp))
-                            Text("Follow your favorites", color = Color.White, fontSize = metrics.sp(22), fontWeight = FontWeight.Bold)
-                            Text("Get live updates for the teams you love.", color = GoalioColors.Body, fontSize = metrics.sp(15))
+                            Spacer(Modifier.height(28.dp))
+                            Text("Follow your favorites", color = Color.White, fontSize = metrics.sp(23), fontWeight = FontWeight.Black)
+                            Text("Get live updates for the teams you love.", color = GoalioColors.Body, fontSize = metrics.sp(16))
                             if (catalogLoading) {
                                 FieldMessage("Loading teams and players...", true)
                             }
                             if (catalogError != null) {
                                 FieldMessage(catalogError.orEmpty(), false)
+                                Spacer(Modifier.height(10.dp))
+                                Button(
+                                    enabled = !catalogLoading,
+                                    onClick = { catalogReloadKey += 1 },
+                                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Field, contentColor = Color.White),
+                                    shape = RoundedCornerShape(50)
+                                ) {
+                                    Text("RETRY LOADING FAVORITES", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
                             Spacer(Modifier.height(17.dp))
-                            CompetitionFilterRow(teamCompetitionId) { teamCompetitionId = it }
-                            Spacer(Modifier.height(12.dp))
                             SearchInput("Search teams...", teamQuery) { teamQuery = it }
+                            Spacer(Modifier.height(12.dp))
+                            CompetitionFilterRow(teamCompetitionId) { teamCompetitionId = it }
                             Text(
                                 "${selectedTeams.size}/$teamLimit teams selected",
                                 color = Muted,
@@ -361,9 +374,9 @@ fun ProfileSetupScreen(
                                 SearchGlyph(Modifier.size(25.dp), Color.White)
                             }
                             Spacer(Modifier.height(12.dp))
-                            CompetitionFilterRow(playerCompetitionId) { playerCompetitionId = it }
-                            Spacer(Modifier.height(12.dp))
                             SearchInput("Search players...", playerQuery) { playerQuery = it }
+                            Spacer(Modifier.height(12.dp))
+                            CompetitionFilterRow(playerCompetitionId) { playerCompetitionId = it }
                             Text(
                                 "${selectedPlayers.size}/$playerLimit players selected",
                                 color = Muted,
@@ -438,16 +451,6 @@ fun ProfileSetupScreen(
                             modifier = Modifier.padding(horizontal = 26.dp, vertical = 4.dp)
                         )
                     }
-                    Text(
-                        "Skip for now",
-                        color = Muted,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier
-                            .align(Alignment.CenterHorizontally)
-                            .clickable(onClick = onSkip)
-                            .padding(top = 4.dp, bottom = 14.dp)
-                    )
                     Button(
                         enabled = valid && !submitting,
                         onClick = {
@@ -472,7 +475,7 @@ fun ProfileSetupScreen(
                         ),
                         shape = RoundedCornerShape(50)
                     ) {
-                        Text(if (submitting) "SAVING…" else "CONTINUE  →", fontSize = 15.sp, fontWeight = FontWeight.Black, letterSpacing = 1.4.sp)
+                        Text(if (submitting) "SAVING..." else "CONTINUE  >", fontSize = 15.sp, fontWeight = FontWeight.Black, letterSpacing = 1.4.sp)
                     }
                 }
             }
@@ -481,7 +484,7 @@ fun ProfileSetupScreen(
 }
 
 @Composable
-private fun ProfileHeader(onBack: () -> Unit) {
+private fun ProfileHeader(onBack: () -> Unit, onSkip: () -> Unit) {
     val metrics = rememberGoalioMetrics()
     Row(
         Modifier.fillMaxWidth().height(metrics.dp(66)).padding(horizontal = metrics.horizontalPadding),
@@ -491,9 +494,21 @@ private fun ProfileHeader(onBack: () -> Unit) {
             BackGlyph(Modifier.size(metrics.dp(25)), Color.White)
         }
         Spacer(Modifier.weight(1f))
-        Text("⚽ Goalio", color = Color.White, fontSize = metrics.sp(23), fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
+        Text("Goalio", color = Color.White, fontSize = metrics.sp(23), fontWeight = FontWeight.ExtraBold, letterSpacing = 3.sp)
         Spacer(Modifier.weight(1f))
-        Spacer(Modifier.width(38.dp))
+        Surface(
+            onClick = onSkip,
+            color = GoalioColors.Accent,
+            contentColor = Color.White,
+            shape = RoundedCornerShape(50)
+        ) {
+            Text(
+                "Skip",
+                fontSize = metrics.sp(13),
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = metrics.dp(18), vertical = metrics.dp(9))
+            )
+        }
     }
 }
 
@@ -565,6 +580,9 @@ private fun Throwable.userFacingBackendMessage(prefix: String): String {
     return "$prefix Verify the backend connection and try again."
 }
 
+private fun ProfileCatalog.catalogErrorMessage(): String? =
+    listOfNotNull(teamError, playerError).takeIf { it.isNotEmpty() }?.joinToString(" ")
+
 @Composable
 private fun SearchInput(hint: String, value: String, onValueChange: (String) -> Unit) {
     Row(
@@ -606,8 +624,8 @@ private fun CompetitionFilterRow(selectedId: Int?, onSelected: (Int?) -> Unit) {
 
 @Composable
 private fun SelectionChip(label: String, onRemove: () -> Unit) {
-    Surface(color = Color.White, shape = RoundedCornerShape(50), onClick = onRemove) {
-        Text("$label  ×", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+    Surface(color = GoalioColors.Accent, shape = RoundedCornerShape(50), onClick = onRemove) {
+        Text("$label x", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Black,
             modifier = Modifier.padding(horizontal = 13.dp, vertical = 7.dp))
     }
 }
@@ -617,7 +635,7 @@ private fun TeamCard(team: FavoriteTeam, selected: Boolean, modifier: Modifier =
     val metrics = rememberGoalioMetrics()
     Surface(
         onClick = onClick,
-        color = GoalioColors.Surface2,
+        color = Color(0xFF272A2A),
         shape = RoundedCornerShape(24.dp),
         border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) GoalioColors.Accent else GoalioColors.CardBorder),
         modifier = modifier.height(metrics.dp(108))
@@ -625,7 +643,7 @@ private fun TeamCard(team: FavoriteTeam, selected: Boolean, modifier: Modifier =
         Box(Modifier.padding(metrics.dp(10))) {
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
-                    Modifier.size(width = metrics.dp(46), height = metrics.dp(32)).clip(RoundedCornerShape(5.dp))
+                    Modifier.size(width = metrics.dp(54), height = metrics.dp(36)).clip(RoundedCornerShape(5.dp))
                         .background(GoalioColors.Surface3),
                     contentAlignment = Alignment.Center
                 ) {
@@ -656,7 +674,7 @@ private fun TeamCard(team: FavoriteTeam, selected: Boolean, modifier: Modifier =
 private fun PlayerCard(player: FavoritePlayer, selected: Boolean, onClick: () -> Unit) {
     val metrics = rememberGoalioMetrics()
     Surface(
-        color = GoalioColors.Surface2,
+        color = Color(0xFF272A2A),
         border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) GoalioColors.Accent else GoalioColors.Border),
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.width(metrics.dp(196))
@@ -695,7 +713,7 @@ private fun PlayerCard(player: FavoritePlayer, selected: Boolean, onClick: () ->
                     modifier = Modifier.fillMaxWidth().height(39.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Text(if (selected) "PINNED ✓" else "+ PIN TO DASHBOARD", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(if (selected) "PINNED" else "+ PIN TO DASHBOARD", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
