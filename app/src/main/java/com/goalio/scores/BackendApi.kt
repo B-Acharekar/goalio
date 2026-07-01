@@ -72,6 +72,9 @@ data class StandingTeamInfo(
     val wins: Int?,
     val draws: Int?,
     val losses: Int?,
+    val goalsFor: Int?,
+    val goalsAgainst: Int?,
+    val goalDifference: Int?,
     val points: Int?
 )
 
@@ -99,6 +102,8 @@ data class WorldCupBracketMatchInfo(
     val status: String?,
     val homeTeam: String?,
     val awayTeam: String?,
+    val homeTeamLogo: String?,
+    val awayTeamLogo: String?,
     val homeScore: Int?,
     val awayScore: Int?,
     val kickoff: String?
@@ -431,6 +436,9 @@ object GoalioBackendApi {
                 wins = if (isNull("wins")) null else optInt("wins"),
                 draws = if (isNull("draws")) null else optInt("draws"),
                 losses = if (isNull("losses")) null else optInt("losses"),
+                goalsFor = if (isNull("goalsFor")) null else optInt("goalsFor"),
+                goalsAgainst = if (isNull("goalsAgainst")) null else optInt("goalsAgainst"),
+                goalDifference = if (isNull("goalDifference")) null else optInt("goalDifference"),
                 points = if (isNull("points")) null else optInt("points")
             ))
         }
@@ -457,6 +465,8 @@ object GoalioBackendApi {
                 status = nullableString("status"),
                 homeTeam = nullableString("homeTeam"),
                 awayTeam = nullableString("awayTeam"),
+                homeTeamLogo = nullableString("homeTeamLogo"),
+                awayTeamLogo = nullableString("awayTeamLogo"),
                 homeScore = if (isNull("homeScore")) null else optInt("homeScore"),
                 awayScore = if (isNull("awayScore")) null else optInt("awayScore"),
                 kickoff = nullableString("kickoff")

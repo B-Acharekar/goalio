@@ -3,8 +3,12 @@ package com.goalio.scores
 import android.content.Context
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 
 data class ProfileCatalog(
     val teams: List<FavoriteTeam>,
@@ -16,14 +20,23 @@ data class ProfileCatalog(
 )
 
 object ProfileCatalogRepository {
+    private const val PREFS = "goalio_profile_catalog_cache"
+    private const val CATALOG = "catalog"
     private val mutex = Mutex()
     private var cachedCatalog: ProfileCatalog? = null
 
-    fun cached(): ProfileCatalog? = cachedCatalog
+    fun cached(context: Context): ProfileCatalog? {
+        cachedCatalog?.let { return it }
+        return context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(CATALOG, null)
+            ?.let { runCatching { JSONObject(it).toProfileCatalog() }.getOrNull() }
+            ?.also { cachedCatalog = it }
+    }
 
     suspend fun preload(context: Context, force: Boolean = false): ProfileCatalog {
         val catalog = mutex.withLock {
-            if (!force) cachedCatalog?.let { return@withLock it }
+            val persistent = cached(context)
+            if (!force) persistent?.let { return@withLock it }
 
             // Loading teams first also establishes the anonymous Firebase session before
             // the parallel player requests begin.
@@ -41,6 +54,10 @@ object ProfileCatalogRepository {
                 .distinctBy { it.id }
                 .map { it.withCompetitionIds(teams) }
 
+            if (teams.isEmpty() && players.isEmpty() && persistent != null) {
+                return@withLock persistent.copy(teamError = teamError, playerError = playerError)
+            }
+
             ProfileCatalog(
                 teams = teams,
                 players = players,
@@ -48,7 +65,13 @@ object ProfileCatalogRepository {
                 nextPlayerCursor = playerPage.nextCursor,
                 teamError = teamError ?: if (teams.isEmpty()) "No teams are available right now." else null,
                 playerError = playerError ?: if (players.isEmpty()) "No players are available right now." else null
-            ).also { cachedCatalog = it }
+            ).also {
+                cachedCatalog = it
+                withContext(Dispatchers.IO) {
+                    context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                        .edit().putString(CATALOG, it.toJson().toString()).apply()
+                }
+            }
         }
 
         warmImages(context, catalog)
@@ -66,6 +89,56 @@ object ProfileCatalogRepository {
         }
     }
 }
+
+private fun ProfileCatalog.toJson() = JSONObject().apply {
+    put("teams", JSONArray(teams.map { team -> JSONObject().apply {
+        put("id", team.id); put("name", team.name); put("shortName", team.shortName)
+        put("color", team.primaryColor.value.toString()); putNullable("imageUrl", team.imageUrl)
+        put("competitionIds", JSONArray(team.competitionIds.toList()))
+    } }))
+    put("players", JSONArray(players.map { player -> JSONObject().apply {
+        put("id", player.id); put("name", player.name); put("team", player.team); put("initials", player.initials)
+        put("color", player.accent.value.toString()); putNullable("imageUrl", player.imageUrl)
+        put("competitionIds", JSONArray(player.competitionIds.toList()))
+    } }))
+    putNullable("nextTeamCursor", nextTeamCursor)
+    putNullable("nextPlayerCursor", nextPlayerCursor)
+}
+
+private fun JSONObject.toProfileCatalog() = ProfileCatalog(
+    teams = buildList {
+        val source = optJSONArray("teams")
+        if (source != null) for (index in 0 until source.length()) source.getJSONObject(index).run {
+            add(FavoriteTeam(
+                getString("id"), getString("name"), getString("shortName"),
+                androidx.compose.ui.graphics.Color(getString("color").toULong()), nullableString("imageUrl"),
+                optJSONArray("competitionIds").toIntSet()
+            ))
+        }
+    },
+    players = buildList {
+        val source = optJSONArray("players")
+        if (source != null) for (index in 0 until source.length()) source.getJSONObject(index).run {
+            add(FavoritePlayer(
+                getString("id"), getString("name"), getString("team"), getString("initials"),
+                androidx.compose.ui.graphics.Color(getString("color").toULong()), nullableString("imageUrl"),
+                optJSONArray("competitionIds").toIntSet()
+            ))
+        }
+    },
+    nextTeamCursor = nullableString("nextTeamCursor"), nextPlayerCursor = nullableString("nextPlayerCursor")
+)
+
+private fun JSONArray?.toIntSet(): Set<Int> = buildSet {
+    if (this@toIntSet != null) for (index in 0 until length()) add(getInt(index))
+}
+
+private fun JSONObject.putNullable(key: String, value: Any?) {
+    if (value == null) put(key, JSONObject.NULL) else put(key, value)
+}
+
+private fun JSONObject.nullableString(key: String): String? =
+    if (isNull(key)) null else optString(key).ifBlank { null }
 
 private fun Throwable.catalogMessage(prefix: String): String =
     if (this is BackendException) "$prefix $message" else "$prefix ${message ?: "Check the backend connection and try again."}"

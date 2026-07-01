@@ -81,7 +81,7 @@ fun PersonalizedHomeScreen(
     val context = LocalContext.current
     val metrics = rememberGoalioMetrics()
     var matches by remember { mutableStateOf(emptyList<ScheduleMatch>()) }
-    var standings by remember { mutableStateOf<LeagueStandings?>(null) }
+    var standings by remember { mutableStateOf(MatchRepository.cachedStandings(context, "fifa.world")) }
     var loading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val today = remember { LocalDate.now() }
@@ -115,7 +115,7 @@ fun PersonalizedHomeScreen(
         }
     }
     LaunchedEffect(Unit) {
-        runCatching { GoalioBackendApi.getStandings("fifa.world") }
+        runCatching { MatchRepository.refreshStandings(context, "fifa.world") }
             .onSuccess { standings = it }
     }
 

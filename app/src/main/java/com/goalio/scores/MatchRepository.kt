@@ -78,6 +78,18 @@ object MatchRepository {
         return detail
     }
 
+    fun cachedStandings(context: Context, league: String): LeagueStandings? =
+        context.cachePrefs().getString(standingsKey(league), null)
+            ?.let { runCatching { JSONObject(it).toLeagueStandings() }.getOrNull() }
+
+    suspend fun refreshStandings(context: Context, league: String): LeagueStandings {
+        val standings = GoalioBackendApi.getStandings(league)
+        withContext(Dispatchers.IO) {
+            context.cachePrefs().edit().putString(standingsKey(league), standings.toJson().toString()).apply()
+        }
+        return standings
+    }
+
     fun nextRefreshDelayMillis(context: Context, matches: List<ScheduleMatch>): Long {
         val hasLive = matches.any { it.state == "in" }
         if (!hasLive) return 15 * 60 * 1000L
@@ -99,6 +111,8 @@ object MatchRepository {
     private fun feedKey(from: String, to: String) = "feed_${from}_$to"
 
     private fun detailKey(league: String, matchId: String) = "detail_${league}_$matchId"
+
+    private fun standingsKey(league: String) = "standings_$league"
 }
 
 private fun matchNotificationEvents(
@@ -176,6 +190,20 @@ private fun MatchTeamInfo.toJson() = JSONObject().apply {
 private fun MatchVenueInfo.toJson() = JSONObject().apply {
     putNullable("name", name)
     putNullable("city", city)
+}
+
+private fun LeagueStandings.toJson() = JSONObject().apply {
+    put("league", league)
+    putNullable("season", season)
+    put("groups", JSONArray(groups))
+    put("teams", JSONArray(teams.map { team -> JSONObject().apply {
+        putNullable("rank", team.rank); put("teamId", team.teamId); put("name", team.name)
+        putNullable("abbreviation", team.abbreviation); putNullable("logo", team.logo)
+        putNullable("group", team.group); putNullable("stage", team.stage); putNullable("played", team.played)
+        putNullable("wins", team.wins); putNullable("draws", team.draws); putNullable("losses", team.losses)
+        putNullable("goalsFor", team.goalsFor); putNullable("goalsAgainst", team.goalsAgainst)
+        putNullable("goalDifference", team.goalDifference); putNullable("points", team.points)
+    } }))
 }
 
 private fun MatchDetail.toJson() = JSONObject().apply {
@@ -309,6 +337,25 @@ private fun JSONObject.toMatchDetail() = MatchDetail(
     winProbability = optJSONObject("winProbability")?.toWinProbabilityInfo()
 )
 
+private fun JSONObject.toLeagueStandings() = LeagueStandings(
+    league = getString("league"),
+    season = if (isNull("season")) null else optInt("season"),
+    groups = optJSONArray("groups").toStrings(),
+    teams = buildList {
+        val source = optJSONArray("teams")
+        if (source != null) for (index in 0 until source.length()) source.getJSONObject(index).run {
+            add(StandingTeamInfo(
+                rank = nullableInt("rank"), teamId = getString("teamId"), name = getString("name"),
+                abbreviation = nullableString("abbreviation"), logo = nullableString("logo"),
+                group = nullableString("group"), stage = nullableString("stage"), played = nullableInt("played"),
+                wins = nullableInt("wins"), draws = nullableInt("draws"), losses = nullableInt("losses"),
+                goalsFor = nullableInt("goalsFor"), goalsAgainst = nullableInt("goalsAgainst"),
+                goalDifference = nullableInt("goalDifference"), points = nullableInt("points")
+            ))
+        }
+    }
+)
+
 private fun JSONObject.toWinProbabilityInfo() = WinProbabilityInfo(
     homeWinPercentage = optInt("homeWinPercentage", 50),
     awayWinPercentage = optInt("awayWinPercentage", 50),
@@ -414,3 +461,9 @@ private fun JSONArray?.toTimelineEvents(): List<MatchTimelineEvent> = buildList 
 
 private fun JSONObject.nullableString(key: String): String? =
     if (isNull(key)) null else optString(key).ifBlank { null }
+
+private fun JSONObject.nullableInt(key: String): Int? = if (isNull(key)) null else optInt(key)
+
+private fun JSONArray?.toStrings(): List<String> = buildList {
+    if (this@toStrings != null) for (index in 0 until length()) add(getString(index))
+}

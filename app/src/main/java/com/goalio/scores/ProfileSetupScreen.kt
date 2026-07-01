@@ -169,7 +169,7 @@ fun ProfileSetupScreen(
     LaunchedEffect(catalogReloadKey) {
         catalogLoading = true
         catalogError = null
-        val cached = if (catalogReloadKey == 0) ProfileCatalogRepository.cached() else null
+        val cached = if (catalogReloadKey == 0) ProfileCatalogRepository.cached(context) else null
         if (cached != null) {
             teamCatalog = cached.teams
             playerCatalog = cached.players
@@ -177,9 +177,8 @@ fun ProfileSetupScreen(
             nextPlayerCursor = cached.nextPlayerCursor
             catalogError = cached.catalogErrorMessage()
             catalogLoading = false
-            return@LaunchedEffect
         }
-        runCatching { ProfileCatalogRepository.preload(context.applicationContext, force = catalogReloadKey > 0) }
+        runCatching { ProfileCatalogRepository.preload(context.applicationContext, force = true) }
             .onSuccess { catalog ->
                 teamCatalog = catalog.teams
                 playerCatalog = catalog.players
