@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -255,64 +256,82 @@ private fun GroupStat(value: Int?, signed: Boolean = false, bold: Boolean = fals
 }
 
 @Composable
-private fun WorldCupBracket(rounds: List<WorldCupBracketRoundInfo>) {
+private fun WorldCupBracket(bracket: WorldCupBracketInfo) {
     val metrics = rememberGoalioMetrics()
-    val visibleRounds = rounds.filter { it.matches.isNotEmpty() }
+    val hasMatches = bracket.rounds.values.any { it.isNotEmpty() }
     Column(verticalArrangement = Arrangement.spacedBy(metrics.dp(14))) {
         SectionTitle("The Knockout Path")
-        if (visibleRounds.isEmpty()) {
+        if (!hasMatches) {
             WorldCupState("Bracket data is loading from World Cup feed.")
         } else {
             Surface(color = Color(0xFF050505), shape = RoundedCornerShape(metrics.dp(14)), border = BorderStroke(1.dp, Color(0xFF2B2B2B)), modifier = Modifier.fillMaxWidth()) {
-                ConnectedBracket(visibleRounds)
+                ConnectedBracket(bracket)
             }
         }
     }
 }
 
 @Composable
-private fun ConnectedBracket(rounds: List<WorldCupBracketRoundInfo>) {
+private fun ConnectedBracket(bracket: WorldCupBracketInfo) {
     val metrics = rememberGoalioMetrics()
-    val cardWidth = 188f * metrics.scale
-    val cardHeight = 78f * metrics.scale
-    val columnGap = 52f * metrics.scale
-    val rowGap = 16f * metrics.scale
-    val headerHeight = 38f * metrics.scale
+    val cardWidth = 260f * metrics.scale
+    val cardHeight = 92f * metrics.scale
+    val columnGap = 72f * metrics.scale
+    val rowGap = 28f * metrics.scale
+    val headerHeight = 48f * metrics.scale
     val firstStep = cardHeight + rowGap
-    val layouts = remember(rounds, metrics.scale) {
-        val result = mutableListOf<Pair<WorldCupBracketRoundInfo, List<Float>>>()
-        var previous = rounds.first().matches.indices.map { headerHeight + cardHeight / 2f + it * firstStep }
-        result += rounds.first() to previous
-        rounds.drop(1).forEach { round ->
-            val centers = round.matches.indices.map { index ->
-                val top = previous.getOrNull(index * 2)
-                val bottom = previous.getOrNull(index * 2 + 1)
-                when {
-                    top != null && bottom != null -> (top + bottom) / 2f
-                    top != null -> top
-                    else -> headerHeight + cardHeight / 2f + index * firstStep
-                }
-            }
-            result += round to centers
-            previous = centers
-        }
-        result
-    }
-    val contentWidth = rounds.size * cardWidth + (rounds.size - 1).coerceAtLeast(0) * columnGap + 28f * metrics.scale
-    val lastCenter = layouts.flatMap { it.second }.maxOrNull() ?: 0f
-    val contentHeight = kotlin.math.max(340f * metrics.scale, lastCenter + cardHeight / 2f + 20f * metrics.scale)
+    val columns = remember(bracket, metrics.scale) {
+        fun matches(code: String) = bracket.rounds[code].orEmpty().sortedBy { it.slotIndex }
+        fun slots(items: List<WorldCupBracketMatchInfo>, range: IntRange) =
+            items.filter { it.slotIndex in range }.sortedBy { it.slotIndex }
+        fun nextLevel(source: List<Float>) = source.chunked(2).map { pair -> pair.average().toFloat() }
 
-    Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+        val outer = List(8) { headerHeight + cardHeight / 2f + it * firstStep }
+        val round16Centers = nextLevel(outer)
+        val quarterCenters = nextLevel(round16Centers)
+        val semiCenters = nextLevel(quarterCenters)
+        val finalCenters = semiCenters.take(1)
+        val r32 = matches("R32")
+        val r16 = matches("R16")
+        val quarters = matches("QF")
+        val semis = matches("SF")
+        val final = matches("FINAL").filter { it.slotIndex == 0 }.take(1)
+
+        listOf(
+            BracketColumn("ROUND OF 32", slots(r32, 0..7), outer),
+            BracketColumn("ROUND OF 16", slots(r16, 0..3), round16Centers),
+            BracketColumn("QUARTERFINALS", slots(quarters, 0..1), quarterCenters),
+            BracketColumn("SEMIFINALS", slots(semis, 0..0), semiCenters),
+            BracketColumn("FINAL", final, finalCenters),
+            BracketColumn("SEMIFINALS", slots(semis, 1..1), semiCenters),
+            BracketColumn("QUARTERFINALS", slots(quarters, 2..3), quarterCenters),
+            BracketColumn("ROUND OF 16", slots(r16, 4..7), round16Centers),
+            BracketColumn("ROUND OF 32", slots(r32, 8..15), outer)
+        )
+    }
+    val contentWidth = columns.size * cardWidth + (columns.size - 1) * columnGap + 28f * metrics.scale
+    val contentHeight = headerHeight + 8 * firstStep + 10f * metrics.scale
+    val bracketScroll = rememberScrollState()
+
+    LaunchedEffect(bracketScroll.maxValue) {
+        if (bracketScroll.maxValue > 0 && bracketScroll.value == 0) {
+            bracketScroll.scrollTo(bracketScroll.maxValue / 2)
+        }
+    }
+
+    Box(Modifier.fillMaxWidth().horizontalScroll(bracketScroll)) {
         Box(Modifier.width(contentWidth.dp).height(contentHeight.dp).padding(horizontal = metrics.dp(14))) {
             Canvas(Modifier.fillMaxSize()) {
-                val connector = Color(0xFFFF8500).copy(alpha = .72f)
+                val connector = Color(0xFFFF8500).copy(alpha = .78f)
                 val widthPx = cardWidth.dp.toPx()
                 val gapPx = columnGap.dp.toPx()
-                layouts.dropLast(1).forEachIndexed { roundIndex, (_, childCenters) ->
-                    val parentCenters = layouts[roundIndex + 1].second
-                    val startX = roundIndex * (widthPx + gapPx) + widthPx
-                    val middleX = startX + gapPx / 2f
-                    val endX = (roundIndex + 1) * (widthPx + gapPx)
+
+                fun connectRight(childColumn: Int, parentColumn: Int) {
+                    val childCenters = columns[childColumn].centers
+                    val parentCenters = columns[parentColumn].centers
+                    val startX = childColumn * (widthPx + gapPx) + widthPx
+                    val endX = parentColumn * (widthPx + gapPx)
+                    val middleX = (startX + endX) / 2f
                     parentCenters.forEachIndexed { parentIndex, parentCenter ->
                         val children = listOfNotNull(childCenters.getOrNull(parentIndex * 2), childCenters.getOrNull(parentIndex * 2 + 1))
                         if (children.isEmpty()) return@forEachIndexed
@@ -323,17 +342,45 @@ private fun ConnectedBracket(rounds: List<WorldCupBracketRoundInfo>) {
                         drawLine(connector, Offset(middleX, parentCenter.dp.toPx()), Offset(endX, parentCenter.dp.toPx()), 2.dp.toPx(), StrokeCap.Round)
                     }
                 }
+
+                fun connectLeft(childColumn: Int, parentColumn: Int) {
+                    val childCenters = columns[childColumn].centers
+                    val parentCenters = columns[parentColumn].centers
+                    val startX = childColumn * (widthPx + gapPx)
+                    val endX = parentColumn * (widthPx + gapPx) + widthPx
+                    val middleX = (startX + endX) / 2f
+                    parentCenters.forEachIndexed { parentIndex, parentCenter ->
+                        val children = listOfNotNull(childCenters.getOrNull(parentIndex * 2), childCenters.getOrNull(parentIndex * 2 + 1))
+                        if (children.isEmpty()) return@forEachIndexed
+                        children.forEach { child ->
+                            drawLine(connector, Offset(startX, child.dp.toPx()), Offset(middleX, child.dp.toPx()), 2.dp.toPx(), StrokeCap.Round)
+                        }
+                        drawLine(connector, Offset(middleX, children.min().dp.toPx()), Offset(middleX, children.max().dp.toPx()), 2.dp.toPx(), StrokeCap.Round)
+                        drawLine(connector, Offset(middleX, parentCenter.dp.toPx()), Offset(endX, parentCenter.dp.toPx()), 2.dp.toPx(), StrokeCap.Round)
+                    }
+                }
+
+                connectRight(0, 1)
+                connectRight(1, 2)
+                connectRight(2, 3)
+                connectRight(3, 4)
+                connectLeft(8, 7)
+                connectLeft(7, 6)
+                connectLeft(6, 5)
+                connectLeft(5, 4)
             }
-            layouts.forEachIndexed { roundIndex, (round, centers) ->
-                val x = roundIndex * (cardWidth + columnGap)
+            columns.forEachIndexed { columnIndex, column ->
+                val x = columnIndex * (cardWidth + columnGap)
                 Text(
-                    round.round.uppercase(), color = GoalioColors.TextSecondary, fontSize = metrics.sp(11), fontWeight = FontWeight.Black,
+                    column.title, color = if (columnIndex == 4) GoalioColors.Accent else GoalioColors.TextSecondary,
+                    fontSize = metrics.sp(11), fontWeight = FontWeight.Black, textAlign = TextAlign.Center,
                     modifier = Modifier.offset(x.dp, 0.dp).width(cardWidth.dp), maxLines = 1
                 )
-                round.matches.forEachIndexed { matchIndex, match ->
+                column.matches.zip(column.centers).forEach { (match, center) ->
                     BracketMatchBox(
                         match = match,
-                        modifier = Modifier.offset(x.dp, (centers[matchIndex] - cardHeight / 2f).dp).width(cardWidth.dp).height(cardHeight.dp)
+                        modifier = Modifier.offset(x.dp, (center - cardHeight / 2f).dp).width(cardWidth.dp).height(cardHeight.dp),
+                        highlighted = columnIndex == 4
                     )
                 }
             }
@@ -341,12 +388,23 @@ private fun ConnectedBracket(rounds: List<WorldCupBracketRoundInfo>) {
     }
 }
 
+private data class BracketColumn(
+    val title: String,
+    val matches: List<WorldCupBracketMatchInfo>,
+    val centers: List<Float>
+)
+
 @Composable
-private fun BracketMatchBox(match: WorldCupBracketMatchInfo, modifier: Modifier = Modifier) {
+private fun BracketMatchBox(match: WorldCupBracketMatchInfo, modifier: Modifier = Modifier, highlighted: Boolean = false) {
     val metrics = rememberGoalioMetrics()
     Column(modifier) {
-        Text("MATCH", color = GoalioColors.Accent, fontSize = metrics.sp(9), fontWeight = FontWeight.Black)
-        Surface(color = Color(0xFF141414), shape = RoundedCornerShape(metrics.dp(7)), border = BorderStroke(1.dp, Color(0xFF454545)), modifier = Modifier.fillMaxWidth()) {
+        Text("MATCH", color = if (highlighted) Color.White else GoalioColors.Accent, fontSize = metrics.sp(9), fontWeight = FontWeight.Black)
+        Surface(
+            color = if (highlighted) Color(0xFF261600) else Color(0xFF141414),
+            shape = RoundedCornerShape(metrics.dp(7)),
+            border = BorderStroke(1.dp, if (highlighted) GoalioColors.Accent else Color(0xFF454545)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Column(Modifier.padding(horizontal = metrics.dp(9), vertical = metrics.dp(6)), verticalArrangement = Arrangement.spacedBy(metrics.dp(5))) {
                 BracketTeamRow(match.homeTeam.orEmpty(), match.homeScore, match.homeTeamLogo)
                 Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF303030)))
@@ -360,14 +418,16 @@ private fun BracketMatchBox(match: WorldCupBracketMatchInfo, modifier: Modifier 
 private fun BracketTeamRow(name: String, score: Int?, logo: String?) {
     val metrics = rememberGoalioMetrics()
     Row(verticalAlignment = Alignment.CenterVertically) {
-        if (!logo.isNullOrBlank()) {
-            AsyncImage(model = logo, contentDescription = "$name flag", contentScale = ContentScale.Fit, modifier = Modifier.size(metrics.dp(17)))
-        } else {
-            Text(countryFlag(name), fontSize = metrics.sp(13), modifier = Modifier.width(metrics.dp(18)))
+        Box(Modifier.size(metrics.dp(18)), contentAlignment = Alignment.Center) {
+            if (!logo.isNullOrBlank()) {
+                AsyncImage(model = logo, contentDescription = "$name flag", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+            } else {
+                Text(countryFlag(name), fontSize = metrics.sp(13), maxLines = 1)
+            }
         }
         Spacer(Modifier.width(metrics.dp(8)))
-        Text(name, color = Color.White, fontSize = metrics.sp(12), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (score != null) Text(score.toString(), color = GoalioColors.TextPrimary, fontSize = metrics.sp(13), fontWeight = FontWeight.Black)
+        Text(name, color = Color.White, fontSize = metrics.sp(11), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(score?.toString().orEmpty(), color = GoalioColors.TextPrimary, fontSize = metrics.sp(13), fontWeight = FontWeight.Black, textAlign = TextAlign.End, modifier = Modifier.width(metrics.dp(20)))
     }
 }
 

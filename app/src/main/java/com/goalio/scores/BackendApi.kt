@@ -98,7 +98,7 @@ data class WorldCupGroupInfo(val code: String, val teams: List<StandingTeamInfo>
 data class WorldCupBracketMatchInfo(
     val eventId: String,
     val round: String,
-    val matchNumber: Int?,
+    val slotIndex: Int,
     val status: String?,
     val homeTeam: String?,
     val awayTeam: String?,
@@ -106,10 +106,18 @@ data class WorldCupBracketMatchInfo(
     val awayTeamLogo: String?,
     val homeScore: Int?,
     val awayScore: Int?,
-    val kickoff: String?
+    val winnerTeamId: String?,
+    val kickoff: String?,
+    val nextMatchSlot: WorldCupNextMatchSlotInfo?
 )
 
-data class WorldCupBracketRoundInfo(val round: String, val matches: List<WorldCupBracketMatchInfo>)
+data class WorldCupNextMatchSlotInfo(val round: String, val slotIndex: Int, val teamPosition: String)
+
+data class WorldCupBracketInfo(
+    val tournament: String,
+    val bracketType: String,
+    val rounds: Map<String, List<WorldCupBracketMatchInfo>>
+)
 
 data class WorldCupLibraryItemInfo(
     val id: String,
@@ -128,7 +136,7 @@ data class WorldCupBootstrapInfo(
     val upcomingMatches: List<ScheduleMatch>,
     val recentResults: List<ScheduleMatch>,
     val groups: List<WorldCupGroupInfo>,
-    val bracket: List<WorldCupBracketRoundInfo>,
+    val bracket: WorldCupBracketInfo,
     val library: List<WorldCupLibraryItemInfo>,
     val randomFact: WorldCupFactInfo
 )
@@ -417,7 +425,7 @@ object GoalioBackendApi {
         upcomingMatches = optJSONArray("upcomingMatches").toScheduleMatches(),
         recentResults = optJSONArray("recentResults").toScheduleMatches(),
         groups = optJSONArray("groups").toWorldCupGroups(),
-        bracket = optJSONArray("bracket").toWorldCupBracket(),
+        bracket = getJSONObject("bracket").toWorldCupBracket(),
         library = optJSONArray("library").toWorldCupLibrary(),
         randomFact = getJSONObject("randomFact").run { WorldCupFactInfo(getString("title"), getString("body")) }
     )
@@ -450,26 +458,34 @@ object GoalioBackendApi {
         }
     }
 
-    private fun JSONArray?.toWorldCupBracket(): List<WorldCupBracketRoundInfo> = buildList {
-        if (this@toWorldCupBracket != null) for (index in 0 until length()) getJSONObject(index).run {
-            add(WorldCupBracketRoundInfo(getString("round"), optJSONArray("matches").toWorldCupBracketMatches()))
+    private fun JSONObject.toWorldCupBracket() = WorldCupBracketInfo(
+        tournament = getString("tournament"),
+        bracketType = getString("bracketType"),
+        rounds = getJSONObject("rounds").let { source ->
+            listOf("R32", "R16", "QF", "SF", "FINAL").associateWith { code ->
+                source.optJSONArray(code).toWorldCupBracketMatches()
+            }
         }
-    }
+    )
 
     private fun JSONArray?.toWorldCupBracketMatches(): List<WorldCupBracketMatchInfo> = buildList {
         if (this@toWorldCupBracketMatches != null) for (index in 0 until length()) getJSONObject(index).run {
             add(WorldCupBracketMatchInfo(
                 eventId = getString("eventId"),
                 round = getString("round"),
-                matchNumber = if (isNull("matchNumber")) null else optInt("matchNumber"),
+                slotIndex = getInt("slotIndex"),
                 status = nullableString("status"),
                 homeTeam = nullableString("homeTeam"),
                 awayTeam = nullableString("awayTeam"),
-                homeTeamLogo = nullableString("homeTeamLogo"),
-                awayTeamLogo = nullableString("awayTeamLogo"),
+                homeTeamLogo = nullableString("homeLogo"),
+                awayTeamLogo = nullableString("awayLogo"),
                 homeScore = if (isNull("homeScore")) null else optInt("homeScore"),
                 awayScore = if (isNull("awayScore")) null else optInt("awayScore"),
-                kickoff = nullableString("kickoff")
+                winnerTeamId = nullableString("winnerTeamId"),
+                kickoff = nullableString("kickoff"),
+                nextMatchSlot = optJSONObject("nextMatchSlot")?.run {
+                    WorldCupNextMatchSlotInfo(getString("round"), getInt("slotIndex"), getString("teamPosition"))
+                }
             ))
         }
     }

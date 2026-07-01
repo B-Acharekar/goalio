@@ -43,10 +43,7 @@ private fun WorldCupBootstrapInfo.toJson() = JSONObject().apply {
         put("code", group.code)
         put("teams", JSONArray(group.teams.map { it.toJson() }))
     } }))
-    put("bracket", JSONArray(bracket.map { round -> JSONObject().apply {
-        put("round", round.round)
-        put("matches", JSONArray(round.matches.map { it.toJson() }))
-    } }))
+    put("bracket", bracket.toJson())
     put("library", JSONArray(library.map { item -> JSONObject().apply {
         put("id", item.id)
         put("title", item.title)
@@ -108,15 +105,29 @@ private fun StandingTeamInfo.toJson() = JSONObject().apply {
 private fun WorldCupBracketMatchInfo.toJson() = JSONObject().apply {
     put("eventId", eventId)
     put("round", round)
-    putNullable("matchNumber", matchNumber)
+    put("slotIndex", slotIndex)
     putNullable("status", status)
     putNullable("homeTeam", homeTeam)
     putNullable("awayTeam", awayTeam)
-    putNullable("homeTeamLogo", homeTeamLogo)
-    putNullable("awayTeamLogo", awayTeamLogo)
+    putNullable("homeLogo", homeTeamLogo)
+    putNullable("awayLogo", awayTeamLogo)
     putNullable("homeScore", homeScore)
     putNullable("awayScore", awayScore)
+    putNullable("winnerTeamId", winnerTeamId)
     putNullable("kickoff", kickoff)
+    putNullable("nextMatchSlot", nextMatchSlot?.let { next -> JSONObject().apply {
+        put("round", next.round)
+        put("slotIndex", next.slotIndex)
+        put("teamPosition", next.teamPosition)
+    } })
+}
+
+private fun WorldCupBracketInfo.toJson() = JSONObject().apply {
+    put("tournament", tournament)
+    put("bracketType", bracketType)
+    put("rounds", JSONObject().apply {
+        this@toJson.rounds.forEach { (round, matches) -> put(round, JSONArray(matches.map { it.toJson() })) }
+    })
 }
 
 private fun JSONObject.toWorldCupBootstrapInfo() = WorldCupBootstrapInfo(
@@ -139,12 +150,7 @@ private fun JSONObject.toWorldCupBootstrapInfo() = WorldCupBootstrapInfo(
             add(WorldCupGroupInfo(getString("code"), optJSONArray("teams").toStandingTeams()))
         }
     },
-    bracket = buildList {
-        val source = optJSONArray("bracket")
-        if (source != null) for (index in 0 until source.length()) source.getJSONObject(index).run {
-            add(WorldCupBracketRoundInfo(getString("round"), optJSONArray("matches").toBracketMatches()))
-        }
-    },
+    bracket = toCachedBracket(),
     library = buildList {
         val source = optJSONArray("library")
         if (source != null) for (index in 0 until source.length()) source.getJSONObject(index).run {
@@ -186,15 +192,54 @@ private fun JSONArray?.toStandingTeams(): List<StandingTeamInfo> = buildList {
     }
 }
 
-private fun JSONArray?.toBracketMatches(): List<WorldCupBracketMatchInfo> = buildList {
+private fun JSONObject.toCachedBracket(): WorldCupBracketInfo {
+    optJSONObject("bracket")?.let { bracket ->
+        val source = bracket.getJSONObject("rounds")
+        return WorldCupBracketInfo(
+            tournament = bracket.optString("tournament", "FIFA World Cup"),
+            bracketType = bracket.optString("bracketType", "32_TEAM_KNOCKOUT"),
+            rounds = listOf("R32", "R16", "QF", "SF", "FINAL").associateWith { code ->
+                source.optJSONArray(code).toBracketMatches(code)
+            }
+        )
+    }
+
+    val migrated = mutableMapOf<String, List<WorldCupBracketMatchInfo>>()
+    val legacy = optJSONArray("bracket")
+    if (legacy != null) for (index in 0 until legacy.length()) legacy.getJSONObject(index).run {
+        val code = legacyRoundCode(getString("round")) ?: return@run
+        migrated[code] = optJSONArray("matches").toBracketMatches(code)
+    }
+    return WorldCupBracketInfo(
+        tournament = "FIFA World Cup",
+        bracketType = "32_TEAM_KNOCKOUT",
+        rounds = listOf("R32", "R16", "QF", "SF", "FINAL").associateWith { migrated[it].orEmpty() }
+    )
+}
+
+private fun JSONArray?.toBracketMatches(roundCode: String): List<WorldCupBracketMatchInfo> = buildList {
     if (this@toBracketMatches != null) for (index in 0 until length()) getJSONObject(index).run {
         add(WorldCupBracketMatchInfo(
-            eventId = getString("eventId"), round = getString("round"), matchNumber = nullableInt("matchNumber"),
+            eventId = getString("eventId"), round = optString("round", roundCode), slotIndex = optInt("slotIndex", index),
             status = nullableString("status"), homeTeam = nullableString("homeTeam"), awayTeam = nullableString("awayTeam"),
-            homeTeamLogo = nullableString("homeTeamLogo"), awayTeamLogo = nullableString("awayTeamLogo"),
-            homeScore = nullableInt("homeScore"), awayScore = nullableInt("awayScore"), kickoff = nullableString("kickoff")
+            homeTeamLogo = nullableString("homeLogo") ?: nullableString("homeTeamLogo"),
+            awayTeamLogo = nullableString("awayLogo") ?: nullableString("awayTeamLogo"),
+            homeScore = nullableInt("homeScore"), awayScore = nullableInt("awayScore"),
+            winnerTeamId = nullableString("winnerTeamId"), kickoff = nullableString("kickoff"),
+            nextMatchSlot = optJSONObject("nextMatchSlot")?.run {
+                WorldCupNextMatchSlotInfo(getString("round"), getInt("slotIndex"), getString("teamPosition"))
+            }
         ))
     }
+}
+
+private fun legacyRoundCode(value: String): String? = when (value.lowercase()) {
+    "round of 32", "r32" -> "R32"
+    "round of 16", "r16" -> "R16"
+    "quarterfinals", "quarter finals", "qf" -> "QF"
+    "semifinals", "semi finals", "sf" -> "SF"
+    "final", "finals" -> "FINAL"
+    else -> null
 }
 
 private fun JSONObject.putNullable(key: String, value: Any?) {
