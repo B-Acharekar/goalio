@@ -444,7 +444,7 @@ private fun BracketMatchBox(match: WorldCupBracketMatchInfo, modifier: Modifier 
     Column(modifier) {
         Text("MATCH", color = if (highlighted) Color.White else GoalioColors.Accent, fontSize = metrics.sp(9), fontWeight = FontWeight.Black)
         Surface(
-            color = if (highlighted) Color(0xFF261600) else Color(0xFF141414),
+            color = if (highlighted) Color(0xFF241000) else GoalioColors.Neutral,
             shape = RoundedCornerShape(metrics.dp(7)),
             border = BorderStroke(1.dp, if (highlighted) GoalioColors.Accent else Color(0xFF454545)),
             modifier = Modifier.fillMaxWidth()

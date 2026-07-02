@@ -5,13 +5,16 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 
 private val GoalioColorScheme = darkColorScheme(
-    primary = GoalioColors.Accent,
-    onPrimary = GoalioColors.TextPrimary,
-    primaryContainer = GoalioColors.Accent,
-    onPrimaryContainer = GoalioColors.TextPrimary,
-    secondary = GoalioColors.TextPrimary,
-    onSecondary = GoalioColors.Background,
-    tertiary = GoalioColors.TextSecondary,
+    primary = GoalioColors.Primary,
+    onPrimary = GoalioColors.Secondary,
+    primaryContainer = GoalioColors.Neutral,
+    onPrimaryContainer = GoalioColors.Secondary,
+    secondary = GoalioColors.Secondary,
+    onSecondary = GoalioColors.Primary,
+    tertiary = GoalioColors.Tertiary,
+    onTertiary = GoalioColors.Primary,
+    tertiaryContainer = GoalioColors.Tertiary,
+    onTertiaryContainer = GoalioColors.Primary,
     background = GoalioColors.Background,
     onBackground = GoalioColors.TextPrimary,
     surface = GoalioColors.Surface1,

@@ -68,7 +68,7 @@ fun GameScreen(onBack: () -> Unit, onOpenHome: () -> Unit, onOpenMatches: () -> 
             item { Row { Text("FOOTBALL FIVE", color = GoalioColors.TextPrimary, fontSize = metrics.sp(20), fontWeight = FontWeight.Black); Spacer(Modifier.weight(1f)); Text("${leaderboard?.me?.xp ?: 0} XP", color = GoalioColors.Accent, fontWeight = FontWeight.Black) } }
             if (session == null) {
                 item { QuizWelcome(loading, error) { loading = true } }
-                item { Button(onClick = { scope.launch { start() } }, enabled = !loading, colors = ButtonDefaults.buttonColors(containerColor = GoalioColors.Accent), modifier = Modifier.fillMaxWidth().height(54.dp)) { Text(if (loading) "LOADING…" else "PLAY 5 QUESTIONS", color = Color.Black, fontWeight = FontWeight.Black) } }
+                item { Button(onClick = { scope.launch { start() } }, enabled = !loading, border = BorderStroke(2.dp, GoalioColors.Tertiary), shape = RoundedCornerShape(50), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF241000)), modifier = Modifier.fillMaxWidth().height(58.dp)) { Text(if (loading) "LOADING…" else "PLAY 5 QUESTIONS", color = GoalioColors.Secondary, fontWeight = FontWeight.Black) } }
             } else {
                 val question = session!!.questions[index]
                 item {
@@ -92,11 +92,11 @@ fun GameScreen(onBack: () -> Unit, onOpenHome: () -> Unit, onOpenMatches: () -> 
                     }
                 }
                 answer?.let { result -> item { Surface(color = if (result.correct) Color(0xFF173E2D) else Color(0xFF4A2020), shape = RoundedCornerShape(16.dp)) { Column(Modifier.padding(18.dp)) { Text(if (result.correct) "+${result.xpDelta} XP • CORRECT" else "${result.xpDelta} XP • ${if (result.timedOut) "TIME UP" else "WRONG"}", color = if (result.correct) Color(0xFF52E49A) else Color(0xFFFF7C72), fontWeight = FontWeight.Black); Spacer(Modifier.height(7.dp)); Text(result.explanation, color = GoalioColors.TextSecondary) } } } }
-                answer?.let { result -> item { Button(onClick = { if (result.completed) { session = null } else { index++; answer = null; remaining = 15 } }, colors = ButtonDefaults.buttonColors(containerColor = GoalioColors.Accent), modifier = Modifier.fillMaxWidth()) { Text(if (result.completed) "FINISH" else "NEXT QUESTION", color = Color.Black, fontWeight = FontWeight.Black) } } }
+                answer?.let { result -> item { Button(onClick = { if (result.completed) { session = null } else { index++; answer = null; remaining = 15 } }, border = BorderStroke(2.dp, GoalioColors.Tertiary), shape = RoundedCornerShape(50), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF241000)), modifier = Modifier.fillMaxWidth().height(58.dp)) { Text(if (result.completed) "FINISH" else "NEXT QUESTION", color = GoalioColors.Secondary, fontWeight = FontWeight.Black) } } }
             }
             if (session == null) {
                 item { Text("LEADERBOARD", color = GoalioColors.TextPrimary, fontSize = metrics.sp(18), fontWeight = FontWeight.Black) }
-                items(leaderboard?.entries.orEmpty().take(10)) { player -> Surface(color = if (player.isMe) Color(0xFF302A1E) else GoalioColors.Surface1, shape = RoundedCornerShape(14.dp)) { Row(Modifier.fillMaxWidth().padding(15.dp)) { Text("#${player.rank}", color = GoalioColors.Accent, fontWeight = FontWeight.Black, modifier = Modifier.width(48.dp)); Text("@${player.username}", color = GoalioColors.TextPrimary, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)); Text("${player.xp} XP", color = GoalioColors.TextSecondary, fontWeight = FontWeight.Black) } } }
+                items(leaderboard?.entries.orEmpty().take(10)) { player -> Surface(color = if (player.isMe) Color(0xFF241000) else GoalioColors.Surface1, shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, if (player.isMe) GoalioColors.Tertiary else GoalioColors.CardBorder)) { Row(Modifier.fillMaxWidth().padding(15.dp)) { Text("#${player.rank}", color = GoalioColors.Accent, fontWeight = FontWeight.Black, modifier = Modifier.width(48.dp)); Text("@${player.username}", color = GoalioColors.TextPrimary, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)); Text("${player.xp} XP", color = GoalioColors.TextSecondary, fontWeight = FontWeight.Black) } } }
             }
         }
         GoalioBottomBar(Modifier.align(Alignment.BottomCenter), "Games", onOpenHome, onOpenMatches, onOpenWorldCup, {})

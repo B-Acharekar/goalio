@@ -7,6 +7,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -112,7 +113,8 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                     .height(metrics.dp(62))
                     .padding(horizontal = metrics.horizontalPadding),
                 shape = RoundedCornerShape(metrics.dp(20)),
-                colors = ButtonDefaults.buttonColors(containerColor = GoalioColors.Accent, contentColor = Color.White)
+                border = BorderStroke(2.dp, GoalioColors.Tertiary),
+                colors = ButtonDefaults.buttonColors(containerColor = GoalioColors.Neutral, contentColor = Color.White)
             ) {
                 Text(
                     if (page == onboardingPages.lastIndex) "Kick Off" else "Next  >",
@@ -154,8 +156,9 @@ private fun OnboardingHeader(onSkip: () -> Unit) {
         Text("Goalio", color = Color.White, fontSize = metrics.sp(27), fontWeight = FontWeight.Black, letterSpacing = 3.sp)
         Spacer(Modifier.weight(1f))
         Surface(
-            color = GoalioColors.Accent,
+            color = Color(0xFF241000),
             contentColor = Color.White,
+            border = BorderStroke(2.dp, GoalioColors.Tertiary),
             shape = RoundedCornerShape(50),
             modifier = Modifier.clickable(onClick = onSkip)
         ) {

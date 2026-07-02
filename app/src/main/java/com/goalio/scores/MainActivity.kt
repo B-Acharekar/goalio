@@ -243,7 +243,14 @@ class MainActivity : ComponentActivity() {
                             onOpenSettings = { appScreen = "settings" }
                         )
                         "games" -> GameScreen(onBack = { appScreen = "home" }, onOpenHome = { appScreen = "home" }, onOpenMatches = { appScreen = "matches" }, onOpenWorldCup = { appScreen = "worldcup" }, onOpenSettings = { appScreen = "settings" })
-                        "settings" -> SettingsScreen(onBack = { appScreen = "home" }, onHome = { appScreen = "home" }, onMatches = { appScreen = "matches" }, onWorldCup = { appScreen = "worldcup" }, onGames = { appScreen = "games" })
+                        "settings" -> SettingsScreen(
+                            onBack = { appScreen = "home" }, onHome = { appScreen = "home" },
+                            onMatches = { appScreen = "matches" }, onWorldCup = { appScreen = "worldcup" },
+                            onGames = { appScreen = "games" },
+                            onEditProfile = { profileComplete = false },
+                            onLanguage = { languageSelected = false },
+                            onSignOut = { profileComplete = false }
+                        )
                         else -> PersonalizedHomeScreen(
                             fallbackName = settings.getString("profile_full_name", null),
                             fallbackTeams = settings.getStringSet("profile_team_names", emptySet()).orEmpty(),

@@ -334,16 +334,16 @@ private fun MatchTopBar(title: String, onBack: () -> Unit, large: Boolean) {
 private fun DateCard(date: LocalDate, selected: Boolean, onClick: () -> Unit) {
     val metrics = rememberGoalioMetrics()
     Surface(
-        color = if (selected) GoalioColors.Accent else Color(0xFF171A19),
-        contentColor = if (selected) Color.Black else GoalioColors.TextPrimary,
+        color = if (selected) Color(0xFF241000) else GoalioColors.Neutral,
+        contentColor = GoalioColors.TextPrimary,
         border = BorderStroke(1.dp, if (selected) GoalioColors.Accent else GoalioColors.CardBorder),
         shape = RoundedCornerShape(metrics.dp(18)),
         modifier = Modifier.width(metrics.dp(100)).height(metrics.dp(88)).clickable(onClick = onClick)
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Text(date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.US).uppercase(), fontSize = metrics.sp(17), letterSpacing = 2.sp, color = if (selected) Color(0xFF2B1A02) else GoalioColors.TextSecondary)
+            Text(date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.US).uppercase(), fontSize = metrics.sp(17), letterSpacing = 2.sp, color = if (selected) GoalioColors.Tertiary else GoalioColors.TextSecondary)
             Text(date.format(DateTimeFormatter.ofPattern("dd MMM")), fontSize = metrics.sp(19), fontWeight = FontWeight.Black)
-            Text(date.year.toString(), fontSize = metrics.sp(12), color = if (selected) Color(0xFF3F2704) else GoalioColors.TextTertiary)
+            Text(date.year.toString(), fontSize = metrics.sp(12), color = GoalioColors.TextTertiary)
         }
     }
 }
@@ -352,7 +352,7 @@ private fun DateCard(date: LocalDate, selected: Boolean, onClick: () -> Unit) {
 private fun LeagueChip(league: LeagueFilter, selected: Boolean, onClick: () -> Unit) {
     val metrics = rememberGoalioMetrics()
     Surface(
-        color = if (selected) Color(0xFF4A2708) else GoalioColors.Surface2,
+        color = if (selected) Color(0xFF241000) else GoalioColors.Neutral,
         contentColor = GoalioColors.TextPrimary,
         border = BorderStroke(1.dp, if (selected) GoalioColors.Accent else GoalioColors.Border),
         shape = RoundedCornerShape(metrics.dp(12)),

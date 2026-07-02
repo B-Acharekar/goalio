@@ -269,8 +269,9 @@ private fun FeaturedMatchCard(match: ScheduleMatch, onOpenMatch: (ScheduleMatch)
             Spacer(Modifier.height(metrics.dp(28)))
             Button(
                 onClick = { onOpenMatch(match) },
-                colors = ButtonDefaults.buttonColors(containerColor = GoalioColors.Accent, contentColor = GoalioColors.TextPrimary),
-                shape = RoundedCornerShape(metrics.dp(12)),
+                border = BorderStroke(2.dp, GoalioColors.Tertiary),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF241000), contentColor = GoalioColors.TextPrimary),
+                shape = RoundedCornerShape(50),
                 modifier = Modifier.fillMaxWidth().height(metrics.dp(54))
             ) {
                 Text("Match Details", fontSize = metrics.sp(16), fontWeight = FontWeight.Black)
@@ -343,7 +344,7 @@ private fun MatchMiniCard(match: ScheduleMatch, onOpenMatch: (ScheduleMatch) -> 
 private fun ScheduleRow(match: ScheduleMatch, onOpenMatch: (ScheduleMatch) -> Unit) {
     val metrics = rememberGoalioMetrics()
     Surface(
-        color = Color(0xFF1F1F21),
+        color = GoalioColors.Neutral,
         shape = RoundedCornerShape(metrics.dp(11)),
         modifier = Modifier.fillMaxWidth().clickable { onOpenMatch(match) }
     ) {
@@ -363,7 +364,7 @@ private fun WinProbabilityCard(match: ScheduleMatch?) {
     val awayName = match?.awayTeam?.abbreviation ?: match?.awayTeam?.shortName ?: match?.awayTeam?.name ?: "AWAY"
     val homeProbability = match.winProbability()
     Surface(
-        color = Color(0xFF1E1E20),
+        color = GoalioColors.Neutral,
         shape = RoundedCornerShape(metrics.dp(10)),
         border = BorderStroke(1.dp, GoalioColors.TextTertiary.copy(alpha = .55f)),
         modifier = Modifier.fillMaxWidth()
@@ -403,7 +404,7 @@ private fun WorldCupHubCard(standings: LeagueStandings?, onViewHub: () -> Unit) 
     val metrics = rememberGoalioMetrics()
     val rows = remember(standings) { standings?.teams.orEmpty().sortedWith(compareBy<StandingTeamInfo> { it.group ?: "" }.thenBy { it.rank ?: 999 }).take(6) }
     Surface(
-        color = Color(0xFF202022),
+        color = GoalioColors.Neutral,
         shape = RoundedCornerShape(metrics.dp(10)),
         border = BorderStroke(1.dp, GoalioColors.CardBorder),
         modifier = Modifier.fillMaxWidth()

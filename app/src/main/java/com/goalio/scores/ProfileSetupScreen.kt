@@ -280,7 +280,9 @@ fun ProfileSetupScreen(
                                             } else submitError = signInError
                                         }
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color.Black),
+                                    border = BorderStroke(2.dp, GoalioColors.Tertiary),
+                                    shape = RoundedCornerShape(50),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF241000), contentColor = Color.White),
                                     modifier = Modifier.fillMaxWidth()
                                 ) { Text("SIGN IN TO EXISTING PROFILE", fontWeight = FontWeight.Black) }
                             }
@@ -490,11 +492,12 @@ fun ProfileSetupScreen(
                         },
                         modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = metrics.horizontalPadding, vertical = metrics.dp(14)).height(metrics.dp(56)),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = GoalioColors.Accent,
+                            containerColor = Color(0xFF241000),
                             contentColor = GoalioColors.TextPrimary,
                             disabledContainerColor = GoalioColors.Disabled,
                             disabledContentColor = GoalioColors.TextTertiary
                         ),
+                        border = BorderStroke(2.dp, GoalioColors.Tertiary),
                         shape = RoundedCornerShape(50)
                     ) {
                         Text(if (submitting) "SAVING..." else "CONTINUE  >", fontSize = 15.sp, fontWeight = FontWeight.Black, letterSpacing = 1.4.sp)
@@ -646,8 +649,8 @@ private fun CompetitionFilterRow(selectedId: Int?, onSelected: (Int?) -> Unit) {
 
 @Composable
 private fun SelectionChip(label: String, onRemove: () -> Unit) {
-    Surface(color = GoalioColors.Accent, shape = RoundedCornerShape(50), onClick = onRemove) {
-        Text("$label x", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Black,
+    Surface(color = Color(0xFF241000), border = BorderStroke(1.dp, GoalioColors.Tertiary), shape = RoundedCornerShape(50), onClick = onRemove) {
+        Text("$label ×", color = GoalioColors.Secondary, fontSize = 13.sp, fontWeight = FontWeight.Black,
             modifier = Modifier.padding(horizontal = 13.dp, vertical = 7.dp))
     }
 }
@@ -657,7 +660,7 @@ private fun TeamCard(team: FavoriteTeam, selected: Boolean, modifier: Modifier =
     val metrics = rememberGoalioMetrics()
     Surface(
         onClick = onClick,
-        color = Color(0xFF272A2A),
+        color = GoalioColors.Neutral,
         shape = RoundedCornerShape(24.dp),
         border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) GoalioColors.Accent else GoalioColors.CardBorder),
         modifier = modifier.height(metrics.dp(108))
@@ -696,7 +699,7 @@ private fun TeamCard(team: FavoriteTeam, selected: Boolean, modifier: Modifier =
 private fun PlayerCard(player: FavoritePlayer, selected: Boolean, onClick: () -> Unit) {
     val metrics = rememberGoalioMetrics()
     Surface(
-        color = Color(0xFF272A2A),
+        color = GoalioColors.Neutral,
         border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) GoalioColors.Accent else GoalioColors.Border),
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.width(metrics.dp(196))
@@ -728,7 +731,7 @@ private fun PlayerCard(player: FavoritePlayer, selected: Boolean, onClick: () ->
                 Spacer(Modifier.height(metrics.dp(9)))
                 Surface(
                     onClick = onClick,
-                    color = if (selected) GoalioColors.Accent else Color.Transparent,
+                    color = if (selected) Color(0xFF241000) else Color.Transparent,
                     contentColor = GoalioColors.TextPrimary,
                     border = BorderStroke(1.dp, if (selected) GoalioColors.Accent else GoalioColors.Border),
                     shape = RoundedCornerShape(10.dp),
